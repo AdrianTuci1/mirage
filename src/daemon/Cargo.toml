@@ -14,6 +14,12 @@ clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 uuid = { version = "1", features = ["v4"] }
 cfg-if = "1"
+lancedb = "0.37"
+arrow-array = "58"
+arrow-schema = "58"
+arrow-cast = "58"
+arrow-buffer = "58"
+futures = { version = "0.3", features = ["std"] }
 
 [dev-dependencies]
 tempfile = "3"

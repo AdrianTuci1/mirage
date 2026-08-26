@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use mirage_daemon::{logging, DaemonConfig, IpcServer};
+use mirage_daemon::{logging, DaemonConfig, IpcServer, LanceDbStore};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Parser, Debug)]
 #[command(name = "mirage-daemon")]
@@ -72,7 +73,9 @@ async fn main() -> Result<()> {
         .save(&config_path)
         .with_context(|| format!("failed to save config to {}", config_path.display()))?;
 
-    let server = IpcServer::new();
+    let store = Arc::new(LanceDbStore::open(&config).await.context("failed to open LanceDB store")?);
+
+    let server = IpcServer::new(store);
     let config_for_server = config.clone();
 
     let server_handle = tokio::spawn(async move {

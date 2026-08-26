@@ -17,3 +17,9 @@ pub struct SearchResult {
     pub score: f64,
     pub source_type: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecordWithScore {
+    pub record: Record,
+    pub score: f64,
+}

@@ -1,6 +1,9 @@
 use crate::config::DaemonConfig;
+use crate::db::LanceDbStore;
 use crate::ipc::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+use crate::models::{Record, SearchResult};
 use anyhow::{Context, Result};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::future::Future;
@@ -13,12 +16,23 @@ type MethodHandler = Arc<
     dyn Fn(Value) -> Pin<Box<dyn Future<Output = Result<Value, JsonRpcError>> + Send>> + Send + Sync,
 >;
 
+#[derive(Debug, Deserialize)]
+struct SearchRequest {
+    query_vector: Vec<f32>,
+    top_k: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct IndexRequest {
+    records: Vec<Record>,
+}
+
 pub struct IpcServer {
     handlers: HashMap<String, MethodHandler>,
 }
 
 impl IpcServer {
-    pub fn new() -> Self {
+    pub fn new(store: Arc<LanceDbStore>) -> Self {
         let mut server = Self {
             handlers: HashMap::new(),
         };
@@ -31,6 +45,70 @@ impl IpcServer {
                 }))
             })
         });
+
+        let search_store = Arc::clone(&store);
+        server.register("search", move |params: Value| {
+            let store = Arc::clone(&search_store);
+            Box::pin(async move {
+                let request: SearchRequest = serde_json::from_value(params).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                        format!("invalid search params: {}", e),
+                    )
+                })?;
+                let results = store
+                    .search(request.query_vector, request.top_k)
+                    .await
+                    .map_err(|e| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            format!("search failed: {}", e),
+                        )
+                    })?;
+                let response: Vec<SearchResult> = results
+                    .into_iter()
+                    .map(|r| SearchResult {
+                        id: r.record.id,
+                        relative_path: r.record.relative_path,
+                        source_type: r.record.source_type,
+                        score: r.score,
+                    })
+                    .collect();
+                serde_json::to_value(response).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("failed to serialize search results: {}", e),
+                    )
+                })
+            })
+        });
+
+        let index_store = Arc::clone(&store);
+        server.register("index", move |params: Value| {
+            let store = Arc::clone(&index_store);
+            Box::pin(async move {
+                let request: IndexRequest = serde_json::from_value(params).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                        format!("invalid index params: {}", e),
+                    )
+                })?;
+                store.upsert(request.records).await.map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("index failed: {}", e),
+                    )
+                })?;
+                let count = store.count().await.map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("count failed: {}", e),
+                    )
+                })?;
+                Ok(json!({ "count": count }))
+            })
+        });
+
         server
     }
 
@@ -181,11 +259,5 @@ impl IpcServer {
                 id: request.id,
             },
         }
-    }
-}
-
-impl Default for IpcServer {
-    fn default() -> Self {
-        Self::new()
     }
 }

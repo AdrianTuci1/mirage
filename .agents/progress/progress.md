@@ -4,7 +4,7 @@
 
 - **Data ultimei actualizări:** 2026-08-27
 - **Faza curentă:** M9 — Rust Core Daemon + IPC
-- **Progres general:** ~68% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1–T5.5, T8.1–T8.4, T9.1–T9.2 finalizate; T4.3–T4.5, T9.3–T9.6, T10.1–T10.3, T11.1–T11.2, T12.1–T12.2 rămân pending)
+- **Progres general:** ~70% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1–T5.5, T8.1–T8.4, T9.1–T9.4 finalizate; T4.3–T4.5, T9.5–T9.6, T10.1–T10.3, T11.1–T11.2, T12.1–T12.2 rămân pending)
 
 ## Task-uri finalizate
 
@@ -35,6 +35,8 @@
 | T8.4 | Add local vision and translator stubs | 2026-08-27 |
 | T9.1 | Set up Rust daemon project skeleton | 2026-08-27 |
 | T9.2 | Implement IPC server (Unix socket + named pipe) | 2026-08-27 |
+| T9.3 | Integrate LanceDB Rust + vector search | 2026-08-27 |
+| T9.4 | Implement search RPC method | 2026-08-27 |
 
 ## Task-uri în progres
 
@@ -42,11 +44,9 @@ Niciunul.
 
 ## Task-uri următoare (prioritate)
 
-1. **T9.3** — Integrate LanceDB Rust + vector search
-2. **T9.4** — Implement search RPC method
-3. **T9.5** — Integrate ONNX Runtime Rust for local embeddings
-4. **T9.6** — Implement DuckDB analytics engine
-5. **T10.1** — Build Mirage CLI binary
+1. **T9.5** — Integrate ONNX Runtime Rust for local embeddings
+2. **T9.6** — Implement DuckDB analytics engine
+3. **T10.1** — Build Mirage CLI binary
 6. **T10.2** — Implement mirage search / query / status commands
 7. **T10.3** — Implement mirage mcp serve
 8. **T4.3** — Implement Dropbox VFS adapter
@@ -95,3 +95,6 @@ Niciunul.
 - Planul general a fost extins: arhitectură Core Daemon Rust + IPC pentru GUI/CLI/MCP, DuckDB analytics, modular setup wizard, Admin Web Console pentru worker self-hosted. Vezi ADR-urile 008, 009, 010, 011.
 - Constrângeri noi: DuckDB pre-impachetat în binar; datele locale și modelele ONNX se stochează în folderul aplicației (nu în `~/.mirage` sau `Documents`); la dezinstalare totul este șters; nu se depinde de llama.cpp / GGUF.
 - Teste: `pytest -v` — 7 passed; `./gradlew jvmTest` — BUILD SUCCESSFUL.
+- Implementat T9.3–T9.4: `LanceDbStore` în `src/daemon/src/db.rs`, `search` și `index` RPC în `src/daemon/src/ipc/server.rs`, integrat în `main.rs`. Căutarea folosește LanceDB pentru stocare și similaritate cosinus în Rust (brute-force MVP fără index vectorial). Test de integrare `tests/search_rpc.rs` verifică răspuns gol inițial, indexare și căutare cu scor.
+- Build și teste: `cargo build` și `cargo test` trec în `src/daemon/` (5 unit tests + 2 integration tests). A fost necesară ridicarea timeout-ului în `tests/ipc_ping.rs` la 30s din cauza timpului de inițializare LanceDB la primul pornire.
+- Notă: `lancedb = "0.37"` depinde intern de `arrow` 58, așa că am folosit `arrow-array/arrow-schema/arrow-cast/arrow-buffer = "58"` în loc de "53" pentru a evita conflictele de versiune. Compilatorul `protoc` a fost descărcat manual în `/tmp/protoc` deoarece LanceDB are nevoie de el la build.

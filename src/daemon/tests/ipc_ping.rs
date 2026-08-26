@@ -26,7 +26,7 @@ async fn ipc_ping_returns_pong() {
     let mut reader = BufReader::new(stdout);
     let mut line = String::new();
 
-    let ready = tokio::time::timeout(Duration::from_secs(5), async {
+    let ready = tokio::time::timeout(Duration::from_secs(30), async {
         loop {
             line.clear();
             reader.read_line(&mut line).await.unwrap();
