@@ -10,8 +10,9 @@
     "M3: KMP client engine & Vault URI parser",
     "M4: VFS adapters (local, Dropbox, Google Drive, SMB)",
     "M5: Search UI in Compose Desktop",
-    "M6: Offline licensing (ED25519)",
-    "M7: Packaging & release"
+    "M6: Offline licensing (ED25519) — CANCELLED",
+    "M7: Packaging & release",
+    "M8: Local AI models (embeddings, vision, translator)"
   ],
   "nodes": [
     {
@@ -270,58 +271,102 @@
     },
     {
       "id": "T5.2",
-      "title": "Implement Add Remote Vault flow with trial gate",
+      "title": "Implement Add Server flow with server code",
       "module": "client-kmp",
       "status": "pending",
       "assignee": "agent",
       "milestone": "M5",
-      "depends_on": ["T5.1", "T6.1"],
-      "outputs": ["src/client-kmp/src/commonMain/kotlin/ui/AddVaultScreen.kt"],
-      "notes": "14-day trial, then license key prompt."
+      "depends_on": ["T5.1", "T3.3"],
+      "outputs": ["src/client-kmp/src/commonMain/kotlin/ui/AddServerScreen.kt"],
+      "notes": "User enters server URL + code (or full Vault URI). Client does not know managed vs self-hosted."
     },
     {
       "id": "T6.1",
       "title": "Choose offline licensing scheme (ED25519)",
       "module": "client-kmp",
-      "status": "pending",
+      "status": "cancelled",
       "assignee": "agent",
       "milestone": "M6",
       "depends_on": ["T0.1"],
       "outputs": [".agents/decisions/adr/002-licensing-offline.md"],
-      "notes": "Confirm public-key-in-binary approach."
+      "notes": "Cancelled per ADR 007. Replaced by managed/self-hosted server code model."
     },
     {
       "id": "T6.2",
       "title": "Generate ED25519 key pair and license format",
       "module": "shared",
-      "status": "pending",
+      "status": "cancelled",
       "assignee": "agent",
       "milestone": "M6",
       "depends_on": ["T6.1"],
       "outputs": ["scripts/generate-license.py", "src/shared/license/"],
-      "notes": "Private key stays in release pipeline; public key embedded."
+      "notes": "Cancelled per ADR 007."
     },
     {
       "id": "T6.3",
       "title": "Implement license validation in KMP client",
       "module": "client-kmp",
-      "status": "pending",
+      "status": "cancelled",
       "assignee": "agent",
       "milestone": "M6",
       "depends_on": ["T6.2", "T3.1"],
       "outputs": ["src/client-kmp/src/commonMain/kotlin/license/LicenseValidator.kt"],
-      "notes": "Pure Kotlin or multiplatform crypto library."
+      "notes": "Cancelled per ADR 007."
     },
     {
       "id": "T6.4",
       "title": "Implement 14-day trial persistence",
       "module": "client-kmp",
-      "status": "pending",
+      "status": "cancelled",
       "assignee": "agent",
       "milestone": "M6",
       "depends_on": ["T6.3"],
       "outputs": ["src/client-kmp/src/commonMain/kotlin/license/TrialManager.kt"],
-      "notes": "Store first-run timestamp locally."
+      "notes": "Cancelled per ADR 007."
+    },
+    {
+      "id": "T8.1",
+      "title": "Add ONNX Runtime Java dependency to KMP",
+      "module": "client-kmp",
+      "status": "pending",
+      "assignee": "agent",
+      "milestone": "M8",
+      "depends_on": ["T3.1"],
+      "outputs": ["src/client-kmp/build.gradle.kts"],
+      "notes": "ONNX Runtime Java for local embeddings/vision/translator."
+    },
+    {
+      "id": "T8.2",
+      "title": "Implement local text embedder for KMP",
+      "module": "client-kmp",
+      "status": "pending",
+      "assignee": "agent",
+      "milestone": "M8",
+      "depends_on": ["T8.1"],
+      "outputs": ["src/client-kmp/src/jvmMain/kotlin/ai/LocalEmbedder.kt", "src/client-kmp/src/jvmMain/kotlin/ai/OnnxRuntimeEmbedder.kt"],
+      "notes": "MVP: text embeddings. Vision and translator as stubs."
+    },
+    {
+      "id": "T8.3",
+      "title": "Wire local embedder into SearchEngine for real vector search",
+      "module": "client-kmp",
+      "status": "pending",
+      "assignee": "agent",
+      "milestone": "M8",
+      "depends_on": ["T8.2", "T3.4"],
+      "outputs": ["src/client-kmp/src/commonMain/kotlin/search/SearchEngine.kt"],
+      "notes": "Use cosine similarity on real embeddings instead of heuristic text scoring."
+    },
+    {
+      "id": "T8.4",
+      "title": "Add local vision and translator stubs",
+      "module": "client-kmp",
+      "status": "pending",
+      "assignee": "agent",
+      "milestone": "M8",
+      "depends_on": ["T8.1"],
+      "outputs": ["src/client-kmp/src/jvmMain/kotlin/ai/LocalVision.kt", "src/client-kmp/src/jvmMain/kotlin/ai/LocalTranslator.kt"],
+      "notes": "Stubs for future ONNX vision/translator models."
     },
     {
       "id": "T7.1",
@@ -386,14 +431,17 @@
     ["T5.1", "T5.2"],
     ["T6.1", "T5.2"],
     ["T0.1", "T6.1"],
-    ["T6.1", "T6.2"],
-    ["T6.2", "T6.3"],
-    ["T6.3", "T6.4"],
-    ["T6.1", "T6.2"],
+    ["T5.1", "T5.2"],
+    ["T3.3", "T5.2"],
     ["T2.2", "T7.1"],
     ["T5.2", "T7.2"],
-    ["T6.4", "T7.2"],
     ["T7.1", "T7.3"],
-    ["T7.2", "T7.3"]
+    ["T7.2", "T7.3"],
+    ["T3.1", "T8.1"],
+    ["T8.1", "T8.2"],
+    ["T8.2", "T8.3"],
+    ["T8.1", "T8.4"],
+    ["T8.3", "T5.1"],
+    ["T3.4", "T8.3"]
   ]
 }

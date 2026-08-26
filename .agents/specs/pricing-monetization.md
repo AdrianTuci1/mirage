@@ -2,49 +2,43 @@
 
 ## 1. Modelul comercial
 
-Mirage folosește un model hibrid **Fair-Code / Freemium Local-First**, similar cu Obsidian, Syncthing sau Tailscale.
+Mirage folosește un model hibrid **Local-First + Managed Cloud / Self-Hosted**.
+
+- **Aplicația desktop** este un motor de căutare semantică complet local: embeddings, vision și translator rulează pe mașina utilizatorului.
+- **Conectarea la un server** (managed sau self-hosted) se face printr-un cod. Aplicația desktop nu știe dacă serverul este managed sau self-hosted.
+- **Nu există licențiere offline**. Gestionarea clienților conectați la servere se face dintr-o platformă web separată, care nu face parte din acest repository.
 
 ## 2. Tier-uri de preț
 
 | Tier | Preț | Ce include? | Target User |
 |------|------|-------------|-------------|
-| Community / Local | 100% Gratuit (Open-Source) | Indexare 100% pe mașina locală (SSD). Fără limite de dimensiune a datelor locale. | Hobbyiști, studenți, utilizatori casual. |
-| Pro / Cloud & Remote Vaults | $10 / Device (Licență pe viață) | Conectare la Remote Indexer (NAS), Dropbox, Google Drive, S3, Multi-Vault Sync & Licensing Key. | Freelanceri, creatori de conținut, ingineri. |
-| Enterprise Team | $49 / Server | Container Remote Indexer cu suport RBAC și număr nelimitat de clienți conectați. | Echipe, agenții, companii. |
+| Community / Local | 100% Gratuit (Open-Source) | Indexare 100% pe mașina locală. Embedings, vision și translator local. Fără limite de dimensiune a datelor locale. | Hobbyiști, studenți, utilizatori casual. |
+| Pro / Managed Cloud | Abonament lunar/anual | Server managed de noi care procesează datele utilizatorului. Utilizatorul primește un cod și sincronizează. | Freelanceri, creatori de conținut, ingineri. |
+| Enterprise / Self-Hosted | Abonament per server | Container Remote Indexer self-hosted cu RBAC, suport multi-vault și număr nelimitat de clienți conectați. | Echipe, agenții, companii. |
 
-## 3. De ce funcționează prețul de $10 per-device
+## 3. De ce nu mai există licențiere offline
 
-### 3.1 Psihologia utilizatorului open-source & privacy-conscious
+- **Flexibilitate**: utilizatorii pot alege între local gratuit, managed cloud sau self-hosted.
+- **Simplificare**: aplicația desktop nu gestionează licențe, trial-uri sau chei criptografice.
+- **Scalabilitate comercială**: platforma web gestionează clienții, facturarea și accesul la serverele managed.
 
-- Utilizatorii local-first evită abonamentele lunare.
-- O licență unică de $10 este percepută ca un gest de respect, nu ca o taxă corporativă.
-- Plata one-time transmite sustenabilitate pe termen lung.
+## 4. Flow de conectare la un server
 
-### 3.2 Delimitarea clară a valorii
+1. Utilizatorul apasă **Add Server** în interfața desktop.
+2. Introduce **server URL** și **server code** (sau un Vault URI complet).
+3. Clientul validează conexiunea printr-un request de handshake.
+4. Dacă handshake-ul reușește, serverul este adăugat și sincronizarea începe.
 
-- **Gratuit**: tot ce ține de utilizator și de datele sale locale.
-- **Plătit**: conectarea la resurse remote și la un indexer partajat.
+## 5. Consecințe tehnice
 
-## 4. Implementarea licențierii fără server central
+- [ ] Eliminăm toate componentele de licențiere offline (ED25519, trial manager, license validator).
+- [ ] Aplicația desktop suportă atât modul local-only, cât și modul conectat la orice server compatibil.
+- [ ] Remote Indexer rămâne open-source și self-hostable.
+- [ ] Platforma web de gestionare este în afara scope-ului acestui repository.
 
-Pentru a păstra filozofia **Zero-Cloud & No-Account**:
+## 6. Condiții de acceptanță
 
-1. **Achiziție**: utilizatorul cumpără licența ($10) prin LemonSqueezy sau Gumroad.
-2. **Generare**: se generează un **Cryptographic License Key** semnat cu o cheie privată ED25519.
-3. **Validare**: clientul Kotlin verifică offline dacă licența este validă folosind cheia publică împachetată în binar.
-4. **Fără tracking**: nu există autentificare pe servere terțe, conturi de utilizator sau urmărire.
-
-## 5. Flow de activare în UI
-
-1. Utilizatorul apasă **Add Remote Vault** (NAS / Dropbox / Drive) în interfața Compose Desktop.
-2. Se afișează un dialog cu **14 zile trial gratuit**.
-3. După trial, se solicită introducerea **License Key**.
-4. Licența se validează local; dacă este validă, funcțiile Pro sunt deblocate.
-
-## 6. Cerințe de implementare
-
-- [ ] Generare cheie ED25519 (privată în pipeline de release, publică înglobată în client).
-- [ ] Format compact pentru License Key (ex: Base58 sau z-base-32).
-- [ ] Validare offline în clientul KMP.
-- [ ] Trial de 14 zile persistent local (nu se resetează la reinstalare fără mecanism suplimentar).
-- [ ] Integrare cu LemonSqueezy / Gumroad pentru generarea automată a cheilor.
+- [ ] Utilizatorul poate rula Mirage 100% local fără cont sau licență.
+- [ ] Utilizatorul poate adăuga un server self-hosted cu un cod.
+- [ ] Utilizatorul poate adăuga un server managed cu un cod (contract identic).
+- [ ] Aplicația desktop nu diferențiază între managed și self-hosted.

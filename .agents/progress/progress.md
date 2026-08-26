@@ -4,7 +4,7 @@
 
 - **Data ultimei actualizări:** 2026-08-27
 - **Faza curentă:** M3 — KMP client engine & Vault URI parser; delta sync implementat
-- **Progres general:** ~53% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1, T5.3–T5.5 finalizate; T4.3–T4.5, T5.2, T6.1–T6.4 rămân pending)
+- **Progres general:** ~55% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1, T5.3–T5.5 finalizate; T4.3–T4.5, T5.2, T8.1–T8.3 rămân pending)
 
 ## Task-uri finalizate
 
@@ -35,11 +35,13 @@ Niciunul.
 
 ## Task-uri următoare (prioritate)
 
-1. **T4.3** — Implement Dropbox VFS adapter
-2. **T4.4** — Implement Google Drive VFS adapter
-3. **T4.5** — Implement NAS/SMB VFS adapter
-4. **T5.2** — Implement Add Remote Vault flow with trial gate
-5. **T6.1** — Choose offline licensing scheme (ED25519)
+1. **T5.2** — Implement Add Server flow with server code (înlocuiește Add Remote Vault + licensing)
+2. **T8.1** — Add ONNX Runtime Java dependency to KMP
+3. **T8.2** — Implement local text embedder for KMP
+4. **T8.3** — Wire local embedder into SearchEngine for real vector search
+5. **T4.3** — Implement Dropbox VFS adapter
+6. **T4.4** — Implement Google Drive VFS adapter
+7. **T4.5** — Implement NAS/SMB VFS adapter
 
 ## Blockere
 

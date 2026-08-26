@@ -199,6 +199,38 @@ FloatingSearchWindow.hide()
 
 Imports-urile sunt `androidx.compose.*`, dar artifactele rezolvate sunt `org.jetbrains.compose.*` (multiplatform desktop). Nu folosim Jetpack Compose Android-only.
 
+### Module 5: Local AI Models (embeddings, vision, translator)
+
+Aplicația desktop rulează modele ONNX local pentru a nu depinde de server atunci când utilizatorul folosește modul local-only.
+
+#### 3.5.1 Stack
+
+- **ONNX Runtime Java API**: inferență locală pe CPU/GPU.
+- **Models**: modele mici ONNX pentru text embeddings (all-MiniLM-L6-v2), CLIP pentru vision, optional translator.
+- **Storage**: modelele sunt descărcate la prima rulare și stocate în `~/.mirage/models/`.
+
+#### 3.5.2 Interfață
+
+```kotlin
+interface LocalEmbedder {
+    suspend fun embedText(text: String): List<Float>
+    suspend fun embedImage(imageBytes: ByteArray): List<Float>?
+}
+
+interface LocalVision {
+    suspend fun describeImage(imageBytes: ByteArray): String?
+}
+
+interface LocalTranslator {
+    suspend fun translate(text: String, targetLanguage: String): String?
+}
+```
+
+#### 3.5.3 MVP
+
+- Implementăm doar `LocalEmbedder` pentru text.
+- Vision și translator sunt stub-uri pentru viitor.
+
 ## 4. Cerințe nefuncționale
 
 - **Local-first**: indexarea locală este gratuită și fără limite de dimensiune.
@@ -210,11 +242,21 @@ Imports-urile sunt `androidx.compose.*`, dar artifactele rezolvate sunt `org.jet
 
 ## 5. API-uri și contracte
 
-### 5.1 Vault URI
+### 5.1 Server URI
 
-```
-vault://{host}:{port}#vault_id={id}&key={passkey}
-```
+Aplicația desktop poate conecta un server prin:
+
+1. **Server URI complet**:
+   ```
+   vault://{host}:{port}#vault_id={id}&key={passkey}
+   ```
+2. **Server URL + Server Code**:
+   ```
+   https://mirage.example.com
+   code: abc123
+   ```
+
+Clientul nu știe dacă serverul este managed sau self-hosted.
 
 ### 5.2 Delta Sync Endpoint
 
@@ -223,7 +265,7 @@ GET /sync/delta?version={client_last_version}
 Authorization: Bearer {passkey}
 ```
 
-Response: stream de fișiere `.lance` noi.
+Response: stream NDJSON cu recorduri noi.
 
 ### 5.3 LanceDB Record Schema
 
@@ -233,17 +275,19 @@ Response: stream de fișiere `.lance` noi.
   "relative_path": "string",
   "source_type": "enum: nas | dropbox | s3 | gdrive | local",
   "vector": "[float]",
-  "updated_at": "timestamp"
+  "updated_at": "timestamp",
+  "version": "int"
 }
 ```
 
 ## 6. Condiții de acceptanță
 
 - [ ] Remote indexer rulează în Docker cu volum read-only.
-- [ ] Endpoint-ul `/sync/delta` returnează corect delta-ul de fișiere `.lance`.
-- [ ] Clientul KMP poate parse Vault URI și poate sincroniza local LanceDB.
+- [ ] Endpoint-ul `/sync/delta` returnează corect delta-ul de recorduri.
+- [ ] Clientul KMP poate parse Server URI și poate sincroniza vectorii local.
+- [ ] Clientul KMP poate conecta un server prin URL + server code.
 - [ ] VFS poate deschide direct fișiere din local, Dropbox, Google Drive și NAS/SMB.
-- [ ] Licența offline este validată prin cheie ED25519.
 - [ ] Global hotkey deschide fereastra flotantă de căutare pe macOS/Windows/Linux.
 - [ ] System tray icon permite Show/Settings/Quit.
 - [ ] Clipboard history este indexabil și căutabil (opțional).
+- [ ] Embeddings local rulează pe mașina utilizatorului fără server.
