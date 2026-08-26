@@ -57,7 +57,11 @@ def build_record(
     updated_at: datetime | None = None,
     version: int = 1,
 ) -> dict[str, Any]:
-    """Build a record matching the LanceDB record schema."""
+    """Build a record matching the LanceDB record schema.
+
+    The *version* parameter is optional and defaults to 1 for records created
+    outside of a normal indexing run (e.g. direct table inserts in tests).
+    """
     return {
         "id": file_id,
         "relative_path": relative_path,
@@ -96,3 +100,35 @@ def bump_version() -> int:
             f,
         )
     return new_version
+
+
+def _format_timestamp(value: Any) -> str:
+    """Return an ISO 8601 UTC timestamp string with a trailing Z."""
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return str(value)
+
+
+def _serialize_record(row: dict[str, Any]) -> dict[str, Any]:
+    """Convert a LanceDB row into a JSON-serializable delta record."""
+    return {
+        "id": row["id"],
+        "relative_path": row["relative_path"],
+        "source_type": str(row["source_type"]),
+        "vector": [float(v) for v in row["vector"]],
+        "updated_at": _format_timestamp(row["updated_at"]),
+        "version": int(row["version"]),
+    }
+
+
+def get_records_since_version(version: int) -> list[dict[str, Any]]:
+    """Return all records with a version greater than *version*."""
+    table = get_or_create_table()
+    rows = table.to_arrow().to_pylist()
+    return [
+        _serialize_record(row)
+        for row in rows
+        if int(row["version"]) > version
+    ]

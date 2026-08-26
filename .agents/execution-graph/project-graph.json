@@ -95,23 +95,28 @@
       "id": "T2.1",
       "title": "Design delta sync protocol (HTTP2/gRPC)",
       "module": "remote-indexer",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M2",
       "depends_on": ["T1.3"],
       "outputs": [".agents/decisions/adr/003-delta-sync-protocol.md"],
-      "notes": "Choose between gRPC and HTTP2 streaming."
+      "notes": "Decision updated in ADR 003: MVP uses NDJSON record streaming over HTTP instead of raw .lance files. gRPC/HTTP2 can be added later."
     },
     {
       "id": "T2.2",
       "title": "Implement /sync/delta endpoint",
       "module": "remote-indexer",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M2",
       "depends_on": ["T2.1", "T1.6"],
-      "outputs": ["src/remote-indexer/api/sync.py|rs"],
-      "notes": "Stream .lance delta files with Bearer passkey auth."
+      "outputs": [
+        "src/remote-indexer/app/api/sync.py",
+        "src/remote-indexer/app/db.py",
+        "src/remote-indexer/app/config.py",
+        "src/remote-indexer/tests/test_health_and_sync.py"
+      ],
+      "notes": "GET /sync/delta?version={n} streams application/x-ndjson records with X-Latest-Version header. Protected by Authorization: Bearer passkey. Empty body when client is up to date."
     },
     {
       "id": "T3.1",
@@ -139,12 +144,12 @@
       "id": "T3.3",
       "title": "Implement RemoteVaultManager with delta download",
       "module": "client-kmp",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M3",
       "depends_on": ["T3.2", "T2.2"],
       "outputs": ["src/client-kmp/src/commonMain/kotlin/RemoteVaultManager.kt"],
-      "notes": "Use Ktor client with HTTP2 streaming."
+      "notes": "NDJSON delta parsing with Ktor; records upserted into LocalVectorStore via SearchEngine."
     },
     {
       "id": "T3.4",
