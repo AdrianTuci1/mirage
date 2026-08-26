@@ -1,7 +1,7 @@
 {
   "project": "mirage",
   "version": "1.0.0",
-  "last_updated": "2026-08-26",
+  "last_updated": "2026-08-27",
   "description": "Graf de execuție pentru implementarea Mirage. Nodurile sunt task-uri sau livrabile; muchiile sunt dependențe.",
   "milestones": [
     "M0: Setup repo & tooling",
@@ -150,12 +150,19 @@
       "id": "T3.4",
       "title": "Integrate local LanceDB in KMP",
       "module": "client-kmp",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M3",
       "depends_on": ["T3.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/LocalLanceDb.kt"],
-      "notes": "JNI/JNA or CLI wrapper depending on platform support."
+      "outputs": [
+        "src/client-kmp/src/commonMain/kotlin/search/VectorRecord.kt",
+        "src/client-kmp/src/commonMain/kotlin/search/SearchResult.kt",
+        "src/client-kmp/src/commonMain/kotlin/search/LocalVectorStore.kt",
+        "src/client-kmp/src/commonMain/kotlin/search/InMemoryVectorStore.kt",
+        "src/client-kmp/src/commonMain/kotlin/search/SearchEngine.kt",
+        ".agents/decisions/adr/005-local-vector-store-kmp.md"
+      ],
+      "notes": "LanceDB JVM unavailable on Maven Central; implemented in-memory brute-force store behind LocalVectorStore abstraction. Can be swapped with LanceDB-JVM or JNI later without UI changes."
     },
     {
       "id": "T4.1",

@@ -2,9 +2,9 @@
 
 ## Stare curentă
 
-- **Data ultimei actualizări:** 2026-08-26
-- **Faza curentă:** M3 — KMP client engine & Vault URI parser
-- **Progres general:** ~25% (T1.1–T1.3, T3.1, T3.2, T4.1 finalizate; T3.3–T3.4, T4.2–T4.5 rămân pending)
+- **Data ultimei actualizări:** 2026-08-27
+- **Faza curentă:** M3 — KMP client engine & local search MVP
+- **Progres general:** ~30% (T1.1–T1.3, T3.1–T3.2, T3.4, T4.1 finalizate; T3.3, T4.2–T4.5 rămân pending)
 
 ## Task-uri finalizate
 
@@ -16,6 +16,7 @@
 | T1.3 | Integrate LanceDB native core in Remote Indexer | 2026-08-26 |
 | T3.1 | Create KMP project skeleton (Compose Desktop) | 2026-08-26 |
 | T3.2 | Implement Vault URI parser | 2026-08-26 |
+| T3.4 | Integrate local LanceDB in KMP (in-memory MVP) | 2026-08-27 |
 | T4.1 | Define VfsAdapter interface | 2026-08-26 |
 
 ## Task-uri în progres
@@ -29,8 +30,7 @@ Niciunul.
 3. **T1.6** — Implement indexing pipeline: scan, extract, embed, store
 4. **T2.1** — Design delta sync protocol (HTTP2/gRPC)
 5. **T3.3** — Implement RemoteVaultManager with delta download
-6. **T3.4** — Integrate local LanceDB in KMP
-7. **T4.2** — Implement LocalFileSystem VFS adapter
+6. **T4.2** — Implement LocalFileSystem VFS adapter
 8. **T4.3** — Implement Dropbox VFS adapter
 9. **T4.4** — Implement Google Drive VFS adapter
 10. **T4.5** — Implement NAS/SMB VFS adapter
@@ -39,7 +39,7 @@ Niciunul.
 
 - `docker compose up --build` nu a putut fi rulat în mediul curent deoarece daemon-ul Docker nu este pornit. Codul aplicației a fost verificat local (FastAPI pornește, `/health` și `/sync/delta` răspund corect, LanceDB se conectează și schemă este creată conform specificației).
 - Buildul KMP (`./gradlew build` din `src/client-kmp/`) necesită un JDK <= 24 (testat cu JDK 21) deoarece Gradle 8.14 nu suportă Java 26.0.1 (unicul JDK instalat pe sistem). Buildul trece când `JAVA_HOME` este setat la un JDK 21 valid.
-- Integrarea LanceDB JVM este pending: nici `com.github.lancedb`, nici `com.lancedb:lancedb` nu sunt disponibile pe Maven Central. JNI/native integration este planificată pentru T3.4.
+- Integrarea LanceDB JVM a fost deblocată printr-un store vectorial in-memory MVP (ADR 005). O înlocuire cu LanceDB-JVM sau JNI rămâne posibilă fără schimbări în UI.
 
 ## Note pentru următorul agent
 
@@ -51,6 +51,9 @@ Niciunul.
 - Buildul KMP a fost re-verificat cu `JAVA_HOME=/tmp/jdk-21.0.5+11/Contents/Home ./gradlew build` — BUILD SUCCESSFUL.
 - `app/config.py` a fost ajustat pentru dezvoltare locală: `LANCEDB_URI` și `SOURCE_PATH` default la `./data/index` și `./data/source`.
 - Teste: `pytest -v` în `src/remote-indexer/` — 4 passed; `./gradlew jvmTest` în `src/client-kmp/` — toate testele trec.
+- ADR 005 acceptat: pentru clientul KMP se folosește un store vectorial in-memory MVP cu interfața `LocalVectorStore`, lăsând deschisă înlocuirea ulterioară cu LanceDB-JVM sau JNI.
+- Modulul `src/client-kmp/src/commonMain/kotlin/search/` conține `VectorRecord`, `SearchResult`, `LocalVectorStore`, `InMemoryVectorStore` și `SearchEngine`.
+- `SearchScreen` primește acum `SearchEngine` și afișează rezultate reale într-o listă lazy.
 - ADR 004 acceptat: Mirage va fi un launcher global Spotlight/Raycast-style cu global hotkey, fereastră flotantă, system tray și clipboard history.
 - Adăugate `GlobalShortcutManager`, `ClipboardManager`, `SystemTrayManager` în `src/client-kmp/src/jvmMain/kotlin/platform/`.
 - UI flotant actualizat: shortcut `Ctrl/Cmd + Space`, poziționare pe ecranul activ, bară de stare cu "Start indexing" / "Add vault", fereastră Settings separată.

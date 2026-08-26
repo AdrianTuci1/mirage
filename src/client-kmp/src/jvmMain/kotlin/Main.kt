@@ -26,11 +26,16 @@ import mirage.desktop.platform.SystemTrayManager
 import mirage.desktop.platform.centerOnActiveScreen
 import mirage.desktop.ui.SearchScreen
 import mirage.desktop.ui.SettingsWindow
+import mirage.search.InMemoryVectorStore
+import mirage.search.SearchEngine
+import mirage.search.VectorRecord
 
 fun main() = application {
     var isSearchVisible by remember { mutableStateOf(false) }
     var isSettingsVisible by remember { mutableStateOf(false) }
     val clipboardManager = remember { ClipboardManager() }
+
+    val searchEngine = remember { createSearchEngineWithSeedData() }
 
     // Global hotkey toggles the floating search window (Ctrl/Cmd + Space).
     GlobalShortcutManager { isSearchVisible = !isSearchVisible }
@@ -76,6 +81,7 @@ fun main() = application {
                     shadowElevation = 8.dp
                 ) {
                     SearchScreen(
+                        searchEngine = searchEngine,
                         onOpenSettings = { isSettingsVisible = true }
                     )
                 }
@@ -89,4 +95,51 @@ fun main() = application {
             onQuit = ::exitApplication
         )
     }
+}
+
+private fun createSearchEngineWithSeedData(): SearchEngine {
+    val store = InMemoryVectorStore()
+    val engine = SearchEngine(store)
+
+    val now = System.currentTimeMillis()
+    val records = listOf(
+        VectorRecord(
+            id = "doc-1",
+            relativePath = "documents/contract.pdf",
+            sourceType = "local",
+            vector = listOf(0.1f, 0.2f, 0.3f, 0.4f),
+            updatedAt = now - 86_400_000
+        ),
+        VectorRecord(
+            id = "doc-2",
+            relativePath = "notes/todo.txt",
+            sourceType = "local",
+            vector = listOf(0.2f, 0.1f, 0.4f, 0.3f),
+            updatedAt = now - 3_600_000
+        ),
+        VectorRecord(
+            id = "clip-1",
+            relativePath = "clipboard/link-to-repo",
+            sourceType = "clipboard",
+            vector = listOf(0.05f, 0.15f, 0.25f, 0.35f),
+            updatedAt = now
+        ),
+        VectorRecord(
+            id = "nas-1",
+            relativePath = "media/vacation/photo1.jpg",
+            sourceType = "nas",
+            vector = listOf(0.9f, 0.8f, 0.1f, 0.0f),
+            updatedAt = now - 172_800_000
+        ),
+        VectorRecord(
+            id = "dropbox-1",
+            relativePath = "shared/budget.xlsx",
+            sourceType = "dropbox",
+            vector = listOf(0.3f, 0.3f, 0.3f, 0.3f),
+            updatedAt = now - 10_000_000
+        )
+    )
+
+    records.forEach { engine.index(it) }
+    return engine
 }
