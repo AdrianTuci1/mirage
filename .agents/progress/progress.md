@@ -3,8 +3,8 @@
 ## Stare curentă
 
 - **Data ultimei actualizări:** 2026-08-27
-- **Faza curentă:** M8 — Local AI models (embeddings, vision, translator)
-- **Progres general:** ~70% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1–T5.5, T8.1–T8.4 finalizate; T4.3–T4.5 rămân pending)
+- **Faza curentă:** M8–M9 — Local AI + Rust daemon planning
+- **Progres general:** ~65% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1–T5.5, T8.1–T8.4 finalizate; T4.3–T4.5, T9.1–T9.6, T10.1–T10.3, T11.1–T11.2, T12.1–T12.2 rămân pending)
 
 ## Task-uri finalizate
 
@@ -40,9 +40,16 @@ Niciunul.
 
 ## Task-uri următoare (prioritate)
 
-1. **T4.3** — Implement Dropbox VFS adapter
-2. **T4.4** — Implement Google Drive VFS adapter
-3. **T4.5** — Implement NAS/SMB VFS adapter
+1. **T9.1** — Set up Rust daemon project skeleton
+2. **T9.2** — Implement IPC server (Unix socket + named pipe)
+3. **T9.3** — Integrate LanceDB Rust + vector search
+4. **T9.4** — Implement search RPC method
+5. **T10.1** — Build Mirage CLI binary
+6. **T10.2** — Implement mirage search / query / status commands
+7. **T10.3** — Implement mirage mcp serve
+8. **T4.3** — Implement Dropbox VFS adapter
+9. **T4.4** — Implement Google Drive VFS adapter
+10. **T4.5** — Implement NAS/SMB VFS adapter
 
 ## Blockere
 
@@ -78,4 +85,5 @@ Niciunul.
 - `LocalVectorStore` expune acum `upsertAll()` și `latestVersion()`; `VectorRecord` include câmpul `version`; `SearchEngine` expune store-ul subiacent.
 - UI actualizat cu buton "Sync" în bara de stare; la finalizare se reîmprospătează rezultatele.
 - Implementat T5.2: flow-ul Add Server cu URL + code sau Vault URI complet; `ServerConnection` abstractizează conexiunea, iar `RemoteVaultManager` folosește flag-ul HTTPS. SettingsWindow include acum secțiunea Servers cu serverele conectate.
+- Planul general a fost extins: arhitectură Core Daemon Rust + IPC pentru GUI/CLI/MCP, DuckDB analytics, modular setup wizard, Admin Web Console pentru worker self-hosted. Vezi ADR-urile 008, 009, 010, 011.
 - Teste: `pytest -v` — 7 passed; `./gradlew jvmTest` — BUILD SUCCESSFUL.

@@ -2,43 +2,57 @@
 
 ## 1. Modelul comercial
 
-Mirage folosește un model hibrid **Local-First + Managed Cloud / Self-Hosted**.
+Mirage folosește un model **freemium** în trei tier-uri, centrat pe locul unde rulează procesarea și cine administrează infrastructura.
 
-- **Aplicația desktop** este un motor de căutare semantică complet local: embeddings, vision și translator rulează pe mașina utilizatorului.
-- **Conectarea la un server** (managed sau self-hosted) se face printr-un cod. Aplicația desktop nu știe dacă serverul este managed sau self-hosted.
-- **Nu există licențiere offline**. Gestionarea clienților conectați la servere se face dintr-o platformă web separată, care nu face parte din acest repository.
+- **Aplicația desktop și daemonul** sunt întotdeauna open-source și gratuite.
+- **Procesarea** poate fi complet locală, pe un worker self-hosted sau în managed cloud.
+- **Nu există licențiere offline**. Conectarea la servere se face prin User API Keys gestionate din Admin Web Console (self-hosted) sau Dashboard SaaS (managed).
 
 ## 2. Tier-uri de preț
 
-| Tier | Preț | Ce include? | Target User |
-|------|------|-------------|-------------|
-| Community / Local | 100% Gratuit (Open-Source) | Indexare 100% pe mașina locală. Embedings, vision și translator local. Fără limite de dimensiune a datelor locale. | Hobbyiști, studenți, utilizatori casual. |
-| Pro / Managed Cloud | Abonament lunar/anual | Server managed de noi care procesează datele utilizatorului. Utilizatorul primește un cod și sincronizează. | Freelanceri, creatori de conținut, ingineri. |
-| Enterprise / Self-Hosted | Abonament per server | Container Remote Indexer self-hosted cu RBAC, suport multi-vault și număr nelimitat de clienți conectați. | Echipe, agenții, companii. |
+| Tier | Infrastructură Worker | Interfață de Administrare | Cost |
+|------|------------------------|---------------------------|------|
+| **Community (Standalone)** | Local — rulează pe disc/NAS, fără worker remote. | Configurare directă în aplicație. | Gratuit / Open-Source |
+| **Community (Self-Hosted)** | Worker lansat de utilizator pe VM/Docker propriu. | Admin Web Console integrată în worker (User API Keys). | Gratuit / Open-Source |
+| **Managed Cloud (Pro/Ent)** | Cluster serverless orchestrat automat în cloud. | Dashboard SaaS Enterprise (SSO, RBAC). | Abonament per utilizator / volum compute |
 
-## 3. De ce nu mai există licențiere offline
+## 3. Comparație caracteristici
 
-- **Flexibilitate**: utilizatorii pot alege între local gratuit, managed cloud sau self-hosted.
+| Feature | Standalone | Self-Hosted | Managed Cloud |
+|---------|------------|-------------|---------------|
+| Căutare locală vectorială | ✅ | ✅ | ✅ |
+| DuckDB analytics local | ✅ | ✅ | ✅ |
+| MCP / CLI | ✅ | ✅ | ✅ |
+| Worker remote | ❌ | ✅ | ✅ |
+| Admin console | ❌ | ✅ (local) | ✅ (cloud) |
+| SSO / RBAC | ❌ | ❌ | ✅ |
+| Support / SLA | ❌ | ❌ | ✅ |
+
+## 4. De ce nu mai există licențiere offline
+
+- **Flexibilitate**: utilizatorii pot alege local gratuit, self-hosted gratuit sau managed.
 - **Simplificare**: aplicația desktop nu gestionează licențe, trial-uri sau chei criptografice.
-- **Scalabilitate comercială**: platforma web gestionează clienții, facturarea și accesul la serverele managed.
+- **Scalabilitate**: platforma web gestionează facturarea, accesul și monitorizarea.
+- **Adecvare open-source**: workerul self-hosted rămâne 100% open-source.
 
-## 4. Flow de conectare la un server
+## 5. Managementul cheilor
 
-1. Utilizatorul apasă **Add Server** în interfața desktop.
-2. Introduce **server URL** și **server code** (sau un Vault URI complet).
-3. Clientul validează conexiunea printr-un request de handshake.
-4. Dacă handshake-ul reușește, serverul este adăugat și sincronizarea începe.
+### Self-Hosted
 
-## 5. Consecințe tehnice
+1. Utilizatorul rulează `docker compose up` pentru worker.
+2. Deschide Admin Web Console la `http://worker:8080/admin`.
+3. Generează o User API Key pentru fiecare device.
+4. În aplicația desktop apasă **Add Server**, introduce URL-ul workerului și codul (key).
 
-- [ ] Eliminăm toate componentele de licențiere offline (ED25519, trial manager, license validator).
-- [ ] Aplicația desktop suportă atât modul local-only, cât și modul conectat la orice server compatibil.
-- [ ] Remote Indexer rămâne open-source și self-hostable.
-- [ ] Platforma web de gestionare este în afara scope-ului acestui repository.
+### Managed Cloud
+
+1. Utilizatorul se înregistrează în Dashboard SaaS.
+2. Primește endpoint și User API Key.
+3. Adaugă serverul în aplicație la fel ca self-hosted.
 
 ## 6. Condiții de acceptanță
 
-- [ ] Utilizatorul poate rula Mirage 100% local fără cont sau licență.
-- [ ] Utilizatorul poate adăuga un server self-hosted cu un cod.
-- [ ] Utilizatorul poate adăuga un server managed cu un cod (contract identic).
+- [ ] Utilizatorul poate rula Mirage 100% local fără cont.
+- [ ] Utilizatorul poate rula propriul worker self-hosted cu Admin Web Console.
+- [ ] Utilizatorul poate adăuga un server managed prin același flow.
 - [ ] Aplicația desktop nu diferențiază între managed și self-hosted.

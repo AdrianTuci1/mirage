@@ -3,98 +3,139 @@
 ## 1. Diagramă de ansamblu
 
 ```
-                       +-----------------------------------+
-                       |    REMOTE INDEXER (Docker Container)|
-                       |  (Runs ONNX/LanceDB on CPU/GPU)   |
-                       +-----------------+-----------------+
-                                         |
-                                         | Delta Vector Sync (gRPC/HTTP2)
-                                         v
-+-----------------------------------------------------------------------------------+
-|                        KOTLIN MULTIPLATFORM CLIENT ENGINE                         |
-|                                                                                   |
-|  [Search Engine (LanceDB Local)] <--- Reads synced vector files (.lance)          |
-|  [VFS Manager (Direct Fetch)]    ---> Connects via user's private tokens           |
-+-------------------+--------------------+--------------------+---------------------+
-                    |                    |                    |
-                    v                    v                    v
-            +---------------+    +---------------+    +---------------+
-            |  Local File   |    |    Dropbox    |    |   Google Drive|
-            |   System      |    |  (OAuth API)  |    |  (REST API v3)|
-            +---------------+    +---------------+    +---------------+
+                          ┌───────────────────────────┐
+                          │   MIRAGE GUI (KMP App)    │
+                          └─────────────┬─────────────┘
+                                        │
+                                        ▼ (IPC / Socket)
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                           MIRAGE DAEMON (Background)                          │
+│                                                                               │
+│  • Vector & Text Index  (LanceDB / Tantivy)                                   │
+│  • Tabular & SQL Engine (DuckDB / Parquet)                                    │
+│  • Embedded ML          (ONNX Runtime / Rust SIMD)                            │
+│  • Sync Worker          (Local Stream / Remote Cloud Sync)                    │
+└───────────────────────────────▲───────────────────────────────────────────────┘
+                                │
+                                ▼ (IPC / Socket)
+                          ┌───────────────────────────┐
+                          │  CLI & MCP Clients          │
+                          │  (Octomus, Claude, etc.)    │
+                          └─────────────┬─────────────┘
+                                        │
+                                        ▼ (Stdio / Socket)
+                          ┌───────────────────────────┐
+                          │  TERMINAL COMMANDS        │
+                          │  mirage query / search    │
+                          └───────────────────────────┘
 ```
 
 ## 2. Componente principale
 
-### 2.1 Remote Indexer
+### 2.1 Mirage Daemon (Rust)
 
-Container Docker care rulează pe un server cu acces la sursele de date. Responsabilități:
+Proces de fundal care rulează continuu, chiar și când GUI-ul este închis. Responsabilități:
 
-- Scanează sursele configurate (local, NAS, cloud) în mod read-only.
-- Extrage feature-uri (text, imagine, audio) și generează embedding-uri prin ONNX Runtime.
-- Stochează vectorii și metadatele în LanceDB.
-- Expune endpoint-ul `/sync/delta` pentru sincronizarea clienților.
+- Indexare locală și embedded (text, vectori, tabular).
+- Motor de căutare hibrid (vectorial + BM25 + SQL).
+- Sync worker pentru date locale și remote.
+- Expunere IPC prin Unix Domain Sockets (Linux/macOS) și Named Pipes (Windows).
+- Încărcare modele ONNX locale (embeddings, vision, translator, SLM).
+- Execuție DuckDB pentru analitică tabulară.
 
-### 2.2 Kotlin Multiplatform Client
+### 2.2 Mirage GUI (Kotlin Multiplatform + Compose Desktop)
 
-Aplicație desktop (Compose Desktop) care rulează pe Windows, macOS și Linux ca launcher global. Responsabilități:
+Client vizual care se conectează la Daemon prin IPC. Responsabilități:
 
-- Parsează Vault URI și se conectează la Remote Indexer.
-- Descarcă delta-ul de index și îl aplică în LanceDB local.
-- Ascultă un global hotkey (ex: `Cmd/Ctrl + Shift + Space`) și afișează o fereastră flotantă de căutare.
-- Caută în indexul local folosind vectori de interogare.
-- Deschide fișierele direct din sursă prin adaptoare VFS.
-- Oferă system tray icon și clipboard history (opțional).
-- Validează licența Pro offline.
+- Global hotkey, floating search window, system tray.
+- Afișare rezultate și preview (imagine, video, document).
+- Settings, Add Server, Modular Setup Wizard.
+- Nu execută interogări direct; trimite comenzi Daemon-ului.
 
-### 2.3 Virtual File System (VFS)
+### 2.3 Mirage CLI (Rust sau Go)
 
-Strat de abstractizare care permite clientului să acceseze fișierele direct de la sursă:
+Binar lightweight care comunică cu Daemon-ul prin IPC. Comenzi:
 
-- `LocalVfsAdapter`: acces direct pe disc.
-- `DropboxVfsAdapter`: API Dropbox cu token OAuth.
-- `GoogleDriveVfsAdapter`: Drive REST API v3.
-- `NasSmbVfsAdapter`: SMB prin `smbj` / JCIFS sau cale de rețea directă.
+- `mirage search "query"` — căutare hibridă.
+- `mirage query "SELECT ..."` — interogare DuckDB.
+- `mirage status` — stare daemon, memorie, workeri.
+- `mirage mcp serve` — servește protocolul MCP via stdio.
 
-## 3. Fluxuri de date
+### 2.4 MCP Clients
 
-### 3.1 Indexare remote
+Agenți AI (Octomus, Claude, etc.) care folosesc protocolul Model Context Protocol pentru a interoga datele locale prin `mirage mcp serve`.
+
+### 2.5 Worker (Self-Hosted / Managed)
+
+Proces remote care indexează volume mari aproape de sursă (S3, NAS, cloud) și trimite doar delta-index comprimat către Daemon.
+
+## 3. IPC Layer
+
+| Platform | Mecanism | Path exemplu |
+|----------|----------|--------------|
+| Linux / macOS | Unix Domain Socket | `~/.mirage/mirage.sock` sau `/var/run/mirage.sock` |
+| Windows | Named Pipe | `\\.\pipe\mirage_engine` |
+
+Securitate:
+- Sockets sunt protejate de POSIX permissions / Windows ACL.
+- Doar procesele aceluiași utilizator se pot conecta.
+- Evită expunerea unui port TCP localhost vulnerabil la cross-site port scanning.
+
+## 4. Fluxuri de date
+
+### 4.1 Căutare GUI
 
 ```
-Sursă (read-only) -> Extract features -> ONNX inference -> LanceDB -> Delta files
+User query → GUI → IPC → Daemon → Vector Search + BM25 + DuckDB → IPC → GUI → Rezultate
 ```
 
-### 3.2 Sincronizare client
+### 4.2 Căutare CLI
 
 ```
-Client -> GET /sync/delta?version=X -> Server stream .lance delta -> Local LanceDB
+Terminal → mirage search → IPC → Daemon → Search → Terminal output
 ```
 
-### 3.3 Căutare și deschidere (Spotlight-style)
+### 4.3 Analitică SQL
 
 ```
-Global hotkey -> Floating Search Window -> User query -> Embedding -> LanceDB ANN search
-   -> Rezultate -> Enter/Click -> VFS open -> Aplicație nativă
-   -> Esc/Blur -> Hide window
+Natural language → SLM → SQL → DuckDB → Date brute (Parquet/CSV) → Rezultat exact
 ```
 
-### 3.4 Clipboard history (opțional)
+### 4.4 Indexare smart routing
 
 ```
-System clipboard -> poller -> LanceDB vector index -> Searchable in floating window
+Sursă mică/medie → Daemon procesează local
+Sursă mare     → Daemon → Remote Worker → Delta index → Daemon
 ```
 
-## 4. Decizii cheie
+### 4.5 Sync
 
-- **LanceDB**: vector store nativ, suportă fișiere delta și este ușor de sincronizat.
-- **ONNX Runtime**: rulează local fără dependențe de cloud.
-- **Kotlin Multiplatform**: un singur codebase pentru desktop.
-- **Direct fetching**: serverul nu servește conținut, reducând latența și costurile.
-- **Offline licensing**: respectă filozofia no-account.
+```
+Worker / Local Indexer → LanceDB / Parquet → Delta → Daemon → Local store
+```
 
-## 5. Securitate
+## 5. Stack tehnologic actualizat
 
-- Volumele sursă sunt montate read-only în container.
-- Token-urile OAuth rămân pe client.
-- Licențele sunt validate offline cu ED25519.
-- Comunicația remote poate fi securizată prin TLS (recomandat pentru LAN/WAN).
+- **Daemon**: Rust (performanță, memory safety, SIMD).
+- **GUI**: Kotlin Multiplatform + Compose Desktop.
+- **CLI**: Rust (poate împărtăși librării cu daemonul).
+- **Vector store**: LanceDB pentru fișiere delta; DuckDB/Tantivy pentru text search.
+- **OLAP**: DuckDB pentru Parquet/CSV/SQLite/JSON.
+- **ML**: ONNX Runtime pentru embeddings, vision, translator, SLM.
+- **IPC**: Unix Domain Sockets / Named Pipes.
+- **Remote sync**: HTTP/2 NDJSON (MVP), gRPC opțional.
+
+## 6. Securitate
+
+- IPC local securizat prin filesystem permissions.
+- Remote workers se autentifică cu chei de utilizator gestionate din Admin Web Console (self-hosted) sau Dashboard SaaS (managed).
+- Token-uri OAuth pentru cloud (Dropbox, Drive) rămân pe client.
+- Model downloads necesită confirmare manuală.
+
+## 7. Decizii cheie
+
+- **Daemon + IPC**: GUI și CLI sunt clienți, nu rulează interogări.
+- **DuckDB**: motor OLAP embedded pentru analitică tabulară rapidă.
+- **Rust pentru daemon**: performanță maximă și acces nativ la SIMD.
+- **MCP**: integrare standard cu agenți AI.
+- **Wizard modular**: utilizatorul controlează ce module și modele activează.

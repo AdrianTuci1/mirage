@@ -1,90 +1,61 @@
 # Mirage
 
-Mirage este un motor de căutare semantică **local-first** pentru fișiere personale. Indexarea vectorială rulează local sau printr-un container remote sincronizat; fișierele se deschid direct din sursă, fără proxy prin server.
+Mirage este un motor de căutare semantică **local-first** cu arhitectură de daemon. Un proces Rust rulează în fundal și oferă căutare, indexare, analitică SQL și ML local. GUI-ul desktop și CLI-ul sunt clienți care comunică cu daemonul prin IPC.
 
 ## Arhitectură
 
 ```
-                       +-----------------------------------+
-                       |    REMOTE INDEXER (Docker Container)|
-                       |  (Runs ONNX/LanceDB on CPU/GPU)   |
-                       +-----------------+-----------------+
-                                         |
-                                         | Delta Vector Sync (HTTP2)
-                                         v
-+-----------------------------------------------------------------------------------+
-|                        KOTLIN MULTIPLATFORM CLIENT ENGINE                         |
-|                                                                                   |
-|  [Search Engine (LanceDB Local)] <--- Reads synced vector files (.lance)          |
-|  [VFS Manager (Direct Fetch)]    ---> Connects via user's private tokens           |
-+-------------------+--------------------+--------------------+---------------------+
-                    |                    |                    |
-                    v                    v                    v
-            +---------------+    +---------------+    +---------------+
-            |  Local File   |    |    Dropbox    |    |   Google Drive|
-            |   System      |    |  (OAuth API)  |    |  (REST API v3)|
-            +---------------+    +---------------+    +---------------+
+                          ┌───────────────────────────┐
+                          │   MIRAGE GUI (KMP App)    │
+                          └─────────────┬─────────────┘
+                                        │
+                                        ▼ (IPC / Socket)
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                           MIRAGE DAEMON (Rust Background)                       │
+│                                                                               │
+│  • Vector & Text Index  (LanceDB / Tantivy)                                   │
+│  • Tabular & SQL Engine (DuckDB / Parquet)                                    │
+│  • Embedded ML          (ONNX / Rust SIMD)                                    │
+│  • Sync Worker          (Local Stream / Remote Cloud Sync)                    │
+└───────────────────────────────▲───────────────────────────────────────────────┘
+                                │
+                                ▼ (IPC / Socket)
+                          ┌───────────────────────────┐
+                          │  CLI & MCP Clients          │
+                          └─────────────┬─────────────┘
+                                        │
+                                        ▼ (Stdio / Socket)
+                          ┌───────────────────────────┐
+                          │  TERMINAL COMMANDS          │
+                          └───────────────────────────┘
 ```
 
 ## Module
 
-- `src/remote-indexer/` — Container Docker pentru indexare remote.
+- `src/daemon/` — Core Daemon Rust (în planificare).
+- `src/cli/` — CLI Rust (în planificare).
+- `src/remote-indexer/` — Worker Python pentru procesare remote (Docker).
 - `src/client-kmp/` — Aplicație desktop Kotlin Multiplatform + Compose.
-- `src/shared/` — Cod și scripturi comune (licențiere, utils).
+- `src/shared/` — Cod și scripturi comune.
 
 ## Monetizare
 
-| Tier | Preț | Ce include? |
-|------|------|-------------|
-| Community / Local | Gratuit | Indexare 100% locală, fără limite. |
-| Pro / Remote Vaults | $10 / device | Conectare la NAS, Dropbox, Drive, S3. |
-| Enterprise Team | $49 / server | Remote Indexer cu RBAC, clienți nelimitați. |
-
-Licențierea este **offline**, bazată pe ED25519 — fără conturi sau server central.
-
-## Dezvoltare locală
-
-### Remote Indexer
-
-```bash
-cd src/remote-indexer
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pytest -v
-uvicorn app.main:app --host 127.0.0.1 --port 8080
-```
-
-Endpoint-uri:
-- `GET /health`
-- `GET /sync/delta?version={n}`
-
-### Client desktop (KMP + Compose Desktop)
-
-Necesită JDK 21 (Gradle 8.14 nu suportă JDK 26). Dacă sistemul are doar JDK 26:
-
-```bash
-# Opțiunea A: folosește un JDK 21 descărcat temporar
-export JAVA_HOME=/tmp/jdk-21.0.5+11/Contents/Home
-
-# Opțiunea B: instalează Temurin 21
-cd src/client-kmp
-./gradlew build
-./gradlew jvmTest
-```
-
-**Notă despre dependențe:** fișierele Kotlin importă din pachetul `androidx.compose.*`, dar artifactele Gradle rezolvate sunt `org.jetbrains.compose.*` (Compose Multiplatform desktop pentru Windows, macOS, Linux). Nu folosim dependențe Android-only.
+| Tier | Infrastructură | Admin | Cost |
+|------|----------------|-------|------|
+| Community Standalone | Local | Aplicație desktop | Gratuit |
+| Community Self-Hosted | Propriu VM/Docker | Admin Web Console în worker | Gratuit |
+| Managed Cloud | Cluster orchestrat | Dashboard SaaS | Abonament |
 
 ## Documentație
 
-Toate specificațiile, deciziile și planul de execuție sunt în folderul `.agents/`.
+Toate specificațiile, deciziile și planul de execuție sunt în `.agents/`.
 
-- `.agents/specs/technical-spec.md` — Specificația tehnică.
-- `.agents/specs/pricing-monetization.md` — Strategia de monetizare.
-- `.agents/execution-graph/project-graph.json` — Graful de execuție.
-- `.agents/architecture/system-overview.md` — Arhitectura de ansamblu.
-- `.agents/decisions/` — ADR-uri și comparații.
+- `.agents/specs/technical-spec.md`
+- `.agents/specs/pricing-monetization.md`
+- `.agents/execution-graph/project-graph.json`
+- `.agents/architecture/system-overview.md`
+- `.agents/decisions/adr/`
 
 ## Stare
 
-Proiect în fază de planificare. Vezi `.agents/progress/progress.md`.
+Proiect în dezvoltare activă. Faza curentă: M8 local AI + planificare M9 daemon Rust.

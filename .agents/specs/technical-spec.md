@@ -2,278 +2,189 @@
 
 ## 1. Viziune & Context
 
-Mirage este un motor de căutare semantică **local-first** pentru fișiere personale. Indexarea vectorială poate rula fie complet local (gratuit), fie printr-un container remote sincronizat cu clienți (funcție Pro). Căutarea și deschiderea fișierelor se face direct din sursă, fără proxy prin server.
+Mirage este un motor de căutare semantică **local-first** cu arhitectură de daemon. Un proces Rust rulează în fundal și oferă căutare, indexare, analitică SQL și ML local. GUI-ul desktop și CLI-ul sunt clienți care comunică cu daemonul prin IPC. Utilizatorul poate rula Mirage complet local sau se poate conecta la un worker self-hosted/managed pentru volume mari.
 
-## 2. System Architecture Overview
+## 2. Arhitectură de ansamblu
 
 ```
-                       +-----------------------------------+
-                       |    REMOTE INDEXER (Docker Container)|
-                       |  (Runs ONNX/LanceDB on CPU/GPU)   |
-                       +-----------------+-----------------+
-                                         |
-                                         | Delta Vector Sync (gRPC/HTTP2)
-                                         v
-+-----------------------------------------------------------------------------------+
-|                        KOTLIN MULTIPLATFORM CLIENT ENGINE                         |
-|                                                                                   |
-|  [Search Engine (LanceDB Local)] <--- Reads synced vector files (.lance)          |
-|  [VFS Manager (Direct Fetch)]    ---> Connects via user's private tokens           |
-+-------------------+--------------------+--------------------+---------------------+
-                    |                    |                    |
-                    v                    v                    v
-            +---------------+    +---------------+    +---------------+
-            |  Local File   |    |    Dropbox    |    |   Google Drive|
-            |   System      |    |  (OAuth API)  |    |  (REST API v3)|
-            +---------------+    +---------------+    +---------------+
+                          ┌───────────────────────────┐
+                          │   MIRAGE GUI (KMP App)    │
+                          └─────────────┬─────────────┘
+                                        │
+                                        ▼ (IPC / Socket)
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                           MIRAGE DAEMON (Rust Background)                       │
+│                                                                               │
+│  • Vector & Text Index  (LanceDB / Tantivy)                                   │
+│  • Tabular & SQL Engine (DuckDB / Parquet)                                    │
+│  • Embedded ML          (ONNX / Rust SIMD)                                    │
+│  • Sync Worker          (Local Stream / Remote Cloud Sync)                    │
+└───────────────────────────────▲───────────────────────────────────────────────┘
+                                │
+                                ▼ (IPC / Socket)
+                          ┌───────────────────────────┐
+                          │  CLI & MCP Clients          │
+                          └─────────────┬─────────────┘
+                                        │
+                                        ▼ (Stdio / Socket)
+                          ┌───────────────────────────┐
+                          │  TERMINAL COMMANDS          │
+                          └───────────────────────────┘
 ```
 
 ## 3. Module de implementare
 
-### Module 1: Remote Indexer Setup (Dockerized Service)
+### Module 1: Mirage Daemon (Rust)
 
-#### 3.1.1 Stack Tehnologic
+#### 3.1.1 Stack
 
-- **Runtime**: Python 3.11 sau Rust binary containerizat.
-- **Vector Store**: LanceDB Native Core.
-- **ML Inference**: ONNX Runtime (int8 execution provider cu suport AVX2/NEON sau CUDA).
-- **Storage Connectors**: fsspec / native SDKs pentru citire read-only din local, NAS (SMB/NFS), S3, Google Drive, Dropbox.
+- **Limbaj**: Rust.
+- **Vector search**: LanceDB Rust + Rust SIMD.
+- **OLAP**: DuckDB embedded.
+- **ML**: ONNX Runtime Rust bindings.
+- **IPC**: Unix Domain Sockets (Linux/macOS) + Named Pipes (Windows).
+- **Remote sync**: NDJSON streaming over HTTP/2 (MVP), gRPC opțional.
 
-#### 3.1.2 Configurare Docker
+#### 3.1.2 Configurare
 
 ```yaml
-version: '3.8'
-
-services:
-  indexer:
-    image: ghcr.io/org/semantic-indexer:latest
-    container_name: semantic-indexer
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      - VAULT_NAME=Company-NAS
-      - SYNC_INTERVAL_SEC=60
-      - MAX_CPU_THREADS=4
-      - MAX_RAM_MB=4096
-      - SECRET_KEY=generate_on_first_run
-    volumes:
-      - /mnt/storage/nas_media:/data/source:ro # READ-ONLY!
-      - ./vault_db:/data/index
+# ~/.mirage/daemon.yaml
+data_dir: ~/.mirage/data
+models_dir: ~/.mirage/models
+socket_path: ~/.mirage/mirage.sock
+log_level: info
+modules:
+  vector: true
+  text: true
+  tabular: true
+  audio: false
+  vision: false
+sync:
+  workers: []
+  interval_sec: 60
 ```
 
-#### 3.1.3 Remote Indexer Execution Loop (Pseudo-code)
+#### 3.1.3 IPC Protocol
 
-```python
-# 1. Pipeline de ingestie
-def run_indexing_pipeline():
-    for file in scan_sources_diff():
-        # Extragere metadate & frame-uri / audio chunks
-        features = extract_features(file)
-
-        # Generare Vectori ONNX
-        vector = onnx_session.run(features)
-
-        # Inserare în LanceDB
-        lancedb_table.add([{
-            "id": file.unique_hash,
-            "relative_path": file.relative_path,
-            "source_type": file.source_type, # 'nas', 'dropbox', 's3'
-            "vector": vector,
-            "updated_at": timestamp
-        }])
-
-# 2. Endpoint gRPC/HTTP2 de sincronizare a indexului pentru clienți
-@app.get("/sync/delta")
-def get_delta_index(client_last_version: int):
-    # Returnează doar fișierele .lance noi create după versiunea clientului
-    return stream_lance_delta_files(from_version=client_last_version)
-```
-
-### Module 2: Client Connection & Passkey Handshake
-
-#### 3.2.1 Model de conectare (No Account Required)
-
-Când containerul remote pornește, generează o adresă de conectare numită **Vault URI**:
-
-```
-vault://192.168.1.100:8080#vault_id=company_nas&key=sec_pk_9f8a3d12...
-```
-
-#### 3.2.2 Implementare client KMP (Kotlin)
-
-```kotlin
-data class RemoteVaultConfig(
-    val host: String,
-    val port: Int,
-    val vaultId: String,
-    val passkey: String
-)
-
-class RemoteVaultManager(private val config: RemoteVaultConfig) {
-
-    suspend fun syncDeltaIndex(localPath: String) {
-        val lastVersion = getLocalLanceVersion(localPath)
-
-        // 1. Fetch doar delta-ul de la serverul remote
-        val deltaFiles = HttpClient.downloadDelta(
-            url = "http://${config.host}:${config.port}/sync/delta?version=$lastVersion",
-            headers = mapOf("Authorization" to "Bearer ${config.passkey}")
-        )
-
-        // 2. Aplicare delta în baza de date locală LanceDB
-        LanceDBNative.applyDelta(localPath, deltaFiles)
-    }
-}
-```
-
-### Module 3: Virtual File System (VFS) & Direct Fetching
-
-Clientul caută în vectorii sincronizați, dar atunci când deschide fișierul sau generează un preview, nu folosește serverul remote ca proxy, ci se conectează direct la sursă.
-
-#### 3.3.1 Interfața VFS (Kotlin)
-
-```kotlin
-interface VfsAdapter {
-    suspend fun fetchThumbnail(relativePath: String): ByteArray
-    suspend fun openFile(relativePath: String)
-}
-
-class DropboxVfsAdapter(private val oauthToken: String) : VfsAdapter {
-    override suspend fun fetchThumbnail(relativePath: String): ByteArray {
-        return dropboxClient.files().getThumbnail(relativePath)
-    }
-
-    override suspend fun openFile(relativePath: String) {
-        val localTempFile = dropboxClient.files().download(relativePath)
-        Desktop.getDesktop().open(localTempFile)
-    }
-}
-
-class NasSmbVfsAdapter(private val smbCredentials: SmbCredentials) : VfsAdapter {
-    override suspend fun openFile(relativePath: String) {
-        val fullPath = Path.of(smbCredentials.rootPath, relativePath)
-        Desktop.getDesktop().open(fullPath.toFile())
-    }
-}
-```
-
-### Module 4: Global Search UI & OS Integration (Spotlight/Raycast-style)
-
-Clientul nu este o aplicație desktop tradițională cu fereastră permanentă, ci un **launcher global** similar cu Spotlight pe macOS sau Raycast. Utilizatorul apelează o scurtătură globală, tastează un query, primește rezultate și acționează asupra lor (deschide, copiază, previzualizează).
-
-#### 3.4.1 Componente OS
-
-- **Global Shortcut Manager**: ascultă o combinație globală de taste (`Ctrl + Space` pe Windows/Linux, `Cmd + Space` pe macOS) folosind JNativeHook.
-- **Floating Search Window**: fereastră compactă, centrată pe ecranul activ (cursorul mouse-ului), fără decorațiuni, afișată/ascunsă la activarea scurtăturii.
-- **System Tray**: iconiță în bara de meniu/sistem cu opțiuni Show / Settings / Quit.
-- **Clipboard Manager**: istoric al clipboard-ului local, indexabil și căutabil (opțional activabil).
-- **Settings Window**: fereastră separată pentru vaulturi, indexare, scurtături și licențiere.
-- **Empty state**: bară de stare sub search input care arată procentul indexat și butoane rapide "Start indexing" / "Add vault".
-
-#### 3.4.2 Stack UI
-
-- **Compose Multiplatform (Desktop)**: UI declarativ, un singur codebase pentru macOS, Windows, Linux.
-- **JNativeHook**: librărie nativă cross-platform pentru global hotkeys.
-- **AWT SystemTray + Clipboard**: API-uri built-in Java pentru tray icon și clipboard.
-
-#### 3.4.3 Exemplu de flow
-
-```kotlin
-// 1. Utilizatorul apasă Cmd/Ctrl + Shift + Space
-GlobalShortcutManager.register("Cmd+Shift+Space") {
-    FloatingSearchWindow.show()
-}
-
-// 2. Tastează query; clientul caută în LanceDB local
-val results = searchEngine.query(query)
-
-// 3. Selectează un rezultat și apasă Enter -> deschide fișierul
-VfsManager.open(result.relativePath, result.sourceType)
-
-// 4. Esc sau click în afara ferestrei -> ascunde fereastra
-FloatingSearchWindow.hide()
-```
-
-#### 3.4.4 Atenție la dependențe Compose
-
-Imports-urile sunt `androidx.compose.*`, dar artifactele rezolvate sunt `org.jetbrains.compose.*` (multiplatform desktop). Nu folosim Jetpack Compose Android-only.
-
-### Module 5: Local AI Models (embeddings, vision, translator)
-
-Aplicația desktop rulează modele ONNX local pentru a nu depinde de server atunci când utilizatorul folosește modul local-only.
-
-#### 3.5.1 Stack
-
-- **ONNX Runtime Java API**: inferență locală pe CPU/GPU.
-- **Models**: modele mici ONNX pentru text embeddings (all-MiniLM-L6-v2), CLIP pentru vision, optional translator.
-- **Storage**: modelele sunt descărcate la prima rulare și stocate în `~/.mirage/models/`.
-
-#### 3.5.2 Interfață
-
-```kotlin
-interface LocalEmbedder {
-    suspend fun embedText(text: String): List<Float>
-    suspend fun embedImage(imageBytes: ByteArray): List<Float>?
-}
-
-interface LocalVision {
-    suspend fun describeImage(imageBytes: ByteArray): String?
-}
-
-interface LocalTranslator {
-    suspend fun translate(text: String, targetLanguage: String): String?
-}
-```
-
-#### 3.5.3 MVP
-
-- Implementăm doar `LocalEmbedder` pentru text.
-- Vision și translator sunt stub-uri pentru viitor.
-
-## 4. Cerințe nefuncționale
-
-- **Local-first**: indexarea locală este gratuită și fără limite de dimensiune.
-- **Zero-Trust / No-Account**: nu se cere autentificare pe servere centrale.
-- **Performanță**: inferență ONNX int8, suport AVX2/NEON/CUDA.
-- **Securitate**: conectorii read-only; token-urile private rămân pe client.
-- **Portabilitate**: Kotlin Multiplatform pentru desktop (Windows, macOS, Linux).
-- **Discreție OS**: aplicația rulează în background, tray icon, global hotkey, fereastră flotantă.
-
-## 5. API-uri și contracte
-
-### 5.1 Server URI
-
-Aplicația desktop poate conecta un server prin:
-
-1. **Server URI complet**:
-   ```
-   vault://{host}:{port}#vault_id={id}&key={passkey}
-   ```
-2. **Server URL + Server Code**:
-   ```
-   https://mirage.example.com
-   code: abc123
-   ```
-
-Clientul nu știe dacă serverul este managed sau self-hosted.
-
-### 5.2 Delta Sync Endpoint
-
-```http
-GET /sync/delta?version={client_last_version}
-Authorization: Bearer {passkey}
-```
-
-Response: stream NDJSON cu recorduri noi.
-
-### 5.3 LanceDB Record Schema
+Comenzi trimise ca JSON-RPC 2.0 peste IPC socket:
 
 ```json
 {
-  "id": "string (unique hash)",
+  "jsonrpc": "2.0",
+  "method": "search",
+  "params": {"query": "contract 2024", "top_k": 10, "hybrid": true},
+  "id": 1
+}
+```
+
+Răspuns:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {"id": "...", "relative_path": "...", "score": 0.95, "source_type": "local"}
+  ],
+  "id": 1
+}
+```
+
+#### 3.1.4 Metode IPC
+
+- `search(query, top_k, hybrid)` — vector + BM25 + SQL hibrid.
+- `query(sql)` — execută DuckDB SQL.
+- `index(path, source_type)` — indexare locală.
+- `status()` — starea daemonului.
+- `sync(worker_url, code)` — declanșează sincronizare remote.
+- `open(path, source_type)` — deschide fișierul prin VFS.
+
+### Module 2: GUI Client (Kotlin Multiplatform + Compose Desktop)
+
+Client vizual care trimite comenzi Daemon-ului prin IPC.
+
+- Floating search window, global hotkey, system tray.
+- Preview pentru imagini, video, documente.
+- Settings, Add Server, Modular Setup Wizard.
+- Nu rulează interogări direct.
+
+### Module 3: CLI Client (Rust/Go)
+
+Binar lightweight pentru terminal:
+
+- `mirage search "query"`
+- `mirage query "SELECT ..."`
+- `mirage status`
+- `mirage mcp serve`
+
+### Module 4: MCP Protocol Support
+
+`mirage mcp serve` expune un server MCP peste stdio:
+
+- Tools: `search`, `query`, `index_path`, `status`.
+- Resources: fișiere indexate (read-only).
+- Prompts: exemple de interogări.
+
+### Module 5: Remote Worker (Self-Hosted / Managed)
+
+Container Docker pentru procesare la distanță a volumelor mari.
+
+- Expune Admin Web Console pentru managementul cheilor de utilizator.
+- Endpoint `/sync/delta` pentru sincronizare delta.
+- Suportă S3, GCS, Azure, NAS, Dropbox, Google Drive.
+
+### Module 6: Local ML Models
+
+Modele ONNX descărcate local în `~/.mirage/models/`:
+
+- Text embeddings (all-MiniLM-L6-v2).
+- Vision embeddings (CLIP, opțional).
+- SLM pentru generare SQL (opțional).
+- Translator (opțional).
+
+Descărcarea este explicit aprobată de utilizator în wizard.
+
+### Module 7: Modular Setup Wizard
+
+La prima configurare, utilizatorul selectează:
+
+- [x] Vector & Text Indexing (LanceDB / Tantivy)
+- [x] Tabular & SQL Analytics Engine (DuckDB)
+- [ ] Audio / Voice Processing Engine
+- [ ] Multi-Modal & Vision Embeddings
+- [ ] SLM pentru SQL natural-language
+
+Fiecare modul descarcă doar binarele necesare.
+
+## 4. Securitate
+
+- IPC local protejat de filesystem permissions.
+- Remote workers autentificați cu User API Keys.
+- OAuth tokens rămân pe client.
+- Model downloads cu confirmare manuală.
+
+## 5. API-uri și contracte
+
+### 5.1 IPC JSON-RPC
+
+Transport: Unix Domain Socket / Named Pipe.
+Protocol: JSON-RPC 2.0.
+
+### 5.2 Remote Worker Sync
+
+```http
+GET /sync/delta?version={client_last_version}
+Authorization: Bearer {user_api_key}
+```
+
+Response: NDJSON stream cu recorduri noi.
+
+### 5.3 Record Schema
+
+```json
+{
+  "id": "string",
   "relative_path": "string",
-  "source_type": "enum: nas | dropbox | s3 | gdrive | local",
+  "source_type": "enum: local | nas | dropbox | s3 | gdrive",
   "vector": "[float]",
   "updated_at": "timestamp",
   "version": "int"
@@ -282,12 +193,11 @@ Response: stream NDJSON cu recorduri noi.
 
 ## 6. Condiții de acceptanță
 
-- [ ] Remote indexer rulează în Docker cu volum read-only.
-- [ ] Endpoint-ul `/sync/delta` returnează corect delta-ul de recorduri.
-- [ ] Clientul KMP poate parse Server URI și poate sincroniza vectorii local.
-- [ ] Clientul KMP poate conecta un server prin URL + server code.
-- [ ] VFS poate deschide direct fișiere din local, Dropbox, Google Drive și NAS/SMB.
-- [ ] Global hotkey deschide fereastra flotantă de căutare pe macOS/Windows/Linux.
-- [ ] System tray icon permite Show/Settings/Quit.
-- [ ] Clipboard history este indexabil și căutabil (opțional).
-- [ ] Embeddings local rulează pe mașina utilizatorului fără server.
+- [ ] Daemon Rust pornește și ascultă pe IPC socket.
+- [ ] GUI se conectează la daemon și trimite comenzi.
+- [ ] CLI `mirage search` returnează rezultate.
+- [ ] `mirage query` execută DuckDB SQL.
+- [ ] MCP serve funcționează peste stdio.
+- [ ] Remote worker expune Admin Web Console și `/sync/delta`.
+- [ ] Setup Wizard permite activarea/selectarea modulelor.
+- [ ] Modelele ONNX se descarcă doar cu confirmare.
