@@ -48,10 +48,10 @@ Mirage este un motor de căutare semantică **local-first** cu arhitectură de d
 #### 3.1.2 Configurare
 
 ```yaml
-# ~/.mirage/daemon.yaml
-data_dir: ~/.mirage/data
-models_dir: ~/.mirage/models
-socket_path: ~/.mirage/mirage.sock
+# <app-bundle>/daemon.yaml
+data_dir: <app-bundle>/data
+models_dir: <app-bundle>/models
+socket_path: <app-bundle>/mirage.sock
 log_level: info
 modules:
   vector: true
@@ -63,6 +63,9 @@ sync:
   workers: []
   interval_sec: 60
 ```
+
+Toate căile sunt relative la folderul aplicației. La dezinstalare, întreg conținutul este șters.
+
 
 #### 3.1.3 IPC Protocol
 
@@ -134,14 +137,14 @@ Container Docker pentru procesare la distanță a volumelor mari.
 
 ### Module 6: Local ML Models
 
-Modele ONNX descărcate local în `~/.mirage/models/`:
+Modele ONNX descărcate local în folderul aplicației (ex: `<app-bundle>/models/`):
 
 - Text embeddings (all-MiniLM-L6-v2).
 - Vision embeddings (CLIP, opțional).
 - SLM pentru generare SQL (opțional).
 - Translator (opțional).
 
-Descărcarea este explicit aprobată de utilizator în wizard.
+Descărcarea este explicit aprobată de utilizator în wizard. Modelele se șterg odată cu aplicația.
 
 ### Module 7: Modular Setup Wizard
 

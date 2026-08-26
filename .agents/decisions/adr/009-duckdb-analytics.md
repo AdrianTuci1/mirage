@@ -10,20 +10,21 @@ Utilizatorii vor să interogheze date tabulare (CSV, Parquet, JSON, SQLite) cu v
 
 ## Decizie
 
-Folosim **DuckDB** ca motor OLAP embedded în daemon.
+Folosim **DuckDB** ca motor OLAP embedded în daemon, **pre-impachetat în binar**.
 
+- DuckDB este legat static sau bunduit ca librărie nativă în daemonul Rust.
+- Nu se descarcă la runtime; utilizatorul nu are nevoie de instalare separată.
 - DuckDB interoghează direct fișiere tabulare brute.
-- SLM-ul local transformă întrebările în limbaj natural în SQL.
+- SLM-ul local (ONNX) transformă întrebările în limbaj natural în SQL.
 - Rezultatele exacte sunt returnate în sub 15ms pentru volume medii.
 
 ## Consecințe
 
-- Adăugăm dependință DuckDB în daemon Rust.
-- Adăugăm metodă IPC `query(sql)`.
-- CLI primește comanda `mirage query`.
-- MCP expune tool `query`.
-- Volumele mari pot fi procesate local dacă încap pe disc sau remote prin worker.
+- Crește dimensiunea binarului cu ~30-50 MB.
+- Nu mai există dependință de descărcare DuckDB la runtime.
+- Setup wizard nu mai trebuie să gestioneze DuckDB ca modul descărcabil.
+- DuckDB rămâne opțional la nivel de funcționalitate, dar binarul îl conține.
 
 ## Note
 
-DuckDB rămâne opțional în Setup Wizard, dar este activat implicit.
+DuckDB este activat implicit. Utilizatorul poate dezactiva funcționalitatea din setări, dar binarul îl include.

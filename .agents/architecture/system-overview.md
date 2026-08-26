@@ -73,8 +73,10 @@ Proces remote care indexează volume mari aproape de sursă (S3, NAS, cloud) și
 
 | Platform | Mecanism | Path exemplu |
 |----------|----------|--------------|
-| Linux / macOS | Unix Domain Socket | `~/.mirage/mirage.sock` sau `/var/run/mirage.sock` |
+| Linux / macOS | Unix Domain Socket | `<app-bundle>/mirage.sock` |
 | Windows | Named Pipe | `\\.\pipe\mirage_engine` |
+
+Toate datele locale (socket, index, modele) sunt stocate în folderul aplicației pentru a permite dezinstalare curată.
 
 Securitate:
 - Sockets sunt protejate de POSIX permissions / Windows ACL.

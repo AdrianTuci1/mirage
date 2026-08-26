@@ -2,6 +2,8 @@
 
 Mirage este un motor de căutare semantică **local-first** cu arhitectură de daemon. Un proces Rust rulează în fundal și oferă căutare, indexare, analitică SQL și ML local. GUI-ul desktop și CLI-ul sunt clienți care comunică cu daemonul prin IPC.
 
+Toate datele locale și modelele descărcate se păstrează în folderul aplicației. La dezinstalare, nimic nu rămâne în `~/.mirage` sau `Documents`.
+
 ## Arhitectură
 
 ```
