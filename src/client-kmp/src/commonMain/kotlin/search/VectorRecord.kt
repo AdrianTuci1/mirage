@@ -11,5 +11,6 @@ data class VectorRecord(
     val relativePath: String,
     val sourceType: String,
     val vector: List<Float>,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val version: Long = 0
 )

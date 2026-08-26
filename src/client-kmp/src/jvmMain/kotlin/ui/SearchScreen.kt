@@ -82,7 +82,8 @@ import org.jetbrains.skia.Image
 fun SearchScreen(
     searchEngine: SearchEngine,
     vfsAdapter: VfsAdapter,
-    onOpenSettings: () -> Unit = {}
+    onOpenSettings: () -> Unit = {},
+    onSync: suspend () -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf(emptyList<SearchResult>()) }
@@ -148,7 +149,13 @@ fun SearchScreen(
             StatusBar(
                 indexedCount = searchEngine.indexedCount,
                 onStartIndexing = { /* TODO: trigger local indexing */ },
-                onAddCloudVault = { /* TODO: open Add Vault flow */ }
+                onAddCloudVault = { /* TODO: open Add Vault flow */ },
+                onSync = {
+                    scope.launch {
+                        onSync()
+                        results = searchEngine.search(query)
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -548,7 +555,8 @@ private fun EmptyResults(query: String) {
 private fun StatusBar(
     indexedCount: Int,
     onStartIndexing: () -> Unit,
-    onAddCloudVault: () -> Unit
+    onAddCloudVault: () -> Unit,
+    onSync: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -563,6 +571,9 @@ private fun StatusBar(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onStartIndexing) {
                 Text("Start indexing")
+            }
+            TextButton(onClick = onSync) {
+                Text("Sync")
             }
             Button(onClick = onAddCloudVault) {
                 Text("Add vault")

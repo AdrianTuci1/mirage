@@ -25,6 +25,7 @@ class SearchScreenUiTest {
         onNodeWithText("Search files, clipboard, vaults...").assertIsDisplayed()
         onNodeWithText("0 indexed").assertIsDisplayed()
         onNodeWithText("Start indexing").assertIsDisplayed()
+        onNodeWithText("Sync").assertIsDisplayed()
         onNodeWithText("Add vault").assertIsDisplayed()
     }
 

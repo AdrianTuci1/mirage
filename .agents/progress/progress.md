@@ -3,8 +3,8 @@
 ## Stare curentă
 
 - **Data ultimei actualizări:** 2026-08-27
-- **Faza curentă:** M1 — Remote indexer pipeline finalizat; pregătire M2 (delta sync protocol)
-- **Progres general:** ~50% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.2, T3.4, T4.1, T5.1, T5.3–T5.5 finalizate; T3.3, T4.2–T4.5, T5.2, T6.1–T6.4 rămân pending)
+- **Faza curentă:** M3 — KMP client engine & Vault URI parser; delta sync implementat
+- **Progres general:** ~53% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1, T5.3–T5.5 finalizate; T4.3–T4.5, T5.2, T6.1–T6.4 rămân pending)
 
 ## Task-uri finalizate
 
@@ -21,6 +21,7 @@
 | T2.2 | Implement /sync/delta endpoint | 2026-08-27 |
 | T3.1 | Create KMP project skeleton (Compose Desktop) | 2026-08-26 |
 | T3.2 | Implement Vault URI parser | 2026-08-26 |
+| T3.3 | Implement RemoteVaultManager with delta download | 2026-08-27 |
 | T3.4 | Integrate local LanceDB in KMP (in-memory MVP) | 2026-08-27 |
 | T4.1 | Define VfsAdapter interface | 2026-08-26 |
 | T5.1 | Build floating search UI in Compose Desktop | 2026-08-27 |
@@ -34,12 +35,11 @@ Niciunul.
 
 ## Task-uri următoare (prioritate)
 
-1. **T3.3** — Implement RemoteVaultManager with delta download
-4. **T4.2** — Implement LocalFileSystem VFS adapter
-5. **T4.3** — Implement Dropbox VFS adapter
-6. **T4.4** — Implement Google Drive VFS adapter
-7. **T4.5** — Implement NAS/SMB VFS adapter
-8. **T5.2** — Implement Add Remote Vault flow with trial gate
+1. **T4.3** — Implement Dropbox VFS adapter
+2. **T4.4** — Implement Google Drive VFS adapter
+3. **T4.5** — Implement NAS/SMB VFS adapter
+4. **T5.2** — Implement Add Remote Vault flow with trial gate
+5. **T6.1** — Choose offline licensing scheme (ED25519)
 
 ## Blockere
 
@@ -70,4 +70,7 @@ Niciunul.
 - Fereastra de onboarding rămâne pentru mai târziu (nu e prioritar acum).
 - Pipeline de indexare remote implementat pentru fișiere locale și imagini (T1.4–T1.6 completate); folosește embeddings deterministice MVP.
 - Adaptorul VFS local cu thumbnail (T4.2) și UI de preview pentru imagini/video/documente implementate.
+- Implementat T3.3: `RemoteVaultManager` sincronizează delta NDJSON de la `/sync/delta` și aplică înregistrările în `LocalVectorStore` prin `SearchEngine`. Teste adăugate pentru sync cu înregistrări, delta gol și eroare de autentificare.
+- `LocalVectorStore` expune acum `upsertAll()` și `latestVersion()`; `VectorRecord` include câmpul `version`; `SearchEngine` expune store-ul subiacent.
+- UI actualizat cu buton "Sync" în bara de stare; la finalizare se reîmprospătează rezultatele.
 - Teste: `pytest -v` — 7 passed; `./gradlew jvmTest` — BUILD SUCCESSFUL.

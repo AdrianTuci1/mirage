@@ -29,6 +29,8 @@ import mirage.desktop.ui.SettingsWindow
 import mirage.search.InMemoryVectorStore
 import mirage.search.SearchEngine
 import mirage.search.VectorRecord
+import mirage.vault.RemoteVaultConfig
+import mirage.vault.RemoteVaultManager
 import mirage.vfs.adapters.LocalVfsAdapter
 
 fun main() = application {
@@ -38,6 +40,18 @@ fun main() = application {
 
     val searchEngine = remember { createSearchEngineWithSeedData() }
     val vfsAdapter = remember { LocalVfsAdapter(rootPath = System.getProperty("user.home")) }
+    val remoteVaultManager = remember {
+        // TODO: read vault URI from user settings instead of hardcoding.
+        RemoteVaultManager(
+            config = RemoteVaultConfig(
+                host = "localhost",
+                port = 8080,
+                vaultId = "default",
+                passkey = ""
+            ),
+            searchEngine = searchEngine
+        )
+    }
 
     // Global hotkey toggles the floating search window (Ctrl/Cmd + Space).
     GlobalShortcutManager { isSearchVisible = !isSearchVisible }
@@ -85,7 +99,8 @@ fun main() = application {
                     SearchScreen(
                         searchEngine = searchEngine,
                         vfsAdapter = vfsAdapter,
-                        onOpenSettings = { isSettingsVisible = true }
+                        onOpenSettings = { isSettingsVisible = true },
+                        onSync = { remoteVaultManager.syncDeltaIndex() }
                     )
                 }
             }

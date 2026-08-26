@@ -15,6 +15,11 @@ interface LocalVectorStore {
     fun upsert(record: VectorRecord)
 
     /**
+     * Inserts or updates all [records] in a single batch.
+     */
+    fun upsertAll(records: List<VectorRecord>)
+
+    /**
      * Returns the [topK] records closest to [vector] ordered by cosine similarity
      * descending.
      */
@@ -29,4 +34,9 @@ interface LocalVectorStore {
      * Returns the total number of stored records.
      */
     fun size(): Int
+
+    /**
+     * Returns the highest synced version, or 0 if no records have been synced.
+     */
+    fun latestVersion(): Long
 }

@@ -8,7 +8,7 @@ package mirage.search
  * `suspend` to keep the API future-proof for network/disk-backed stores.
  */
 class SearchEngine(
-    private val store: LocalVectorStore,
+    val store: LocalVectorStore,
     var totalRecords: Int = 0
 ) {
 

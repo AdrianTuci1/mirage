@@ -17,6 +17,12 @@ class InMemoryVectorStore : LocalVectorStore {
         records[record.id] = record
     }
 
+    override fun upsertAll(records: List<VectorRecord>) {
+        for (record in records) {
+            this.records[record.id] = record
+        }
+    }
+
     override fun query(vector: List<Float>, topK: Int): List<SearchResult> {
         require(vector.isNotEmpty()) { "Query vector must not be empty" }
         require(topK > 0) { "topK must be positive" }
@@ -42,6 +48,8 @@ class InMemoryVectorStore : LocalVectorStore {
     override fun all(): List<VectorRecord> = records.values.toList()
 
     override fun size(): Int = records.size
+
+    override fun latestVersion(): Long = records.values.maxOfOrNull { it.version } ?: 0L
 
     private fun cosineSimilarity(
         query: List<Float>,
