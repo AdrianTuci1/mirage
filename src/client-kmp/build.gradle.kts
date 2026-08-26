@@ -42,6 +42,23 @@ kotlin {
                 implementation("io.ktor:ktor-client-cio:3.0.3")
             }
         }
+
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+                implementation("io.ktor:ktor-client-mock:3.0.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+            }
+        }
+
+        val jvmTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+                implementation("io.ktor:ktor-client-cio:3.0.3")
+                implementation("org.jetbrains.compose.ui:ui-test:1.7.3")
+                implementation(compose.desktop.currentOs)
+            }
+        }
     }
 }
 

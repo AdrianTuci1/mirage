@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import lancedb
@@ -39,7 +39,8 @@ def get_db() -> lancedb.DBConnection:
 def get_or_create_table() -> lancedb.table.Table:
     """Open or create the index table with the defined record schema."""
     db = get_db()
-    if TABLE_NAME in db.table_names():
+    existing = db.list_tables()
+    if TABLE_NAME in existing:
         return db.open_table(TABLE_NAME)
     return db.create_table(TABLE_NAME, schema=RECORD_SCHEMA)
 
@@ -57,5 +58,5 @@ def build_record(
         "relative_path": relative_path,
         "source_type": source_type,
         "vector": vector,
-        "updated_at": updated_at or datetime.utcnow(),
+        "updated_at": updated_at or datetime.now(timezone.utc),
     }

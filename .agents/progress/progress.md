@@ -50,3 +50,4 @@ Niciunul.
 - Scheletul Remote Indexer este funcțional în `src/remote-indexer/`. T1.4–T1.6 rămân de implementat.
 - Buildul KMP a fost re-verificat cu `JAVA_HOME=/tmp/jdk-21.0.5+11/Contents/Home ./gradlew build` — BUILD SUCCESSFUL.
 - `app/config.py` a fost ajustat pentru dezvoltare locală: `LANCEDB_URI` și `SOURCE_PATH` default la `./data/index` și `./data/source`.
+- Teste: `pytest -v` în `src/remote-indexer/` — 4 passed; `./gradlew jvmTest` în `src/client-kmp/` — toate testele trec.

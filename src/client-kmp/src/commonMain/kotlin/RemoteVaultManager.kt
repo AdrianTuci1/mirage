@@ -16,9 +16,10 @@ import kotlinx.serialization.json.Json
  * left as a stub; wiring it to a platform-specific LanceDB/JNI integration is
  * tracked separately.
  */
-class RemoteVaultManager(private val config: RemoteVaultConfig) {
+open class RemoteVaultManager(private val config: RemoteVaultConfig) {
 
-    private val client = HttpClient {
+    protected open val client = HttpClient {
+        expectSuccess = true
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true })
         }
