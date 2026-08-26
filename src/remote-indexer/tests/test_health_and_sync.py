@@ -12,9 +12,14 @@ def test_health_check():
     assert response.json() == {"status": "ok"}
 
 
-def test_sync_delta_placeholder():
+def test_sync_delta_placeholder(temp_index_dir, monkeypatch):
+    from app import config
+
+    monkeypatch.setattr(config.settings, "lancedb_uri", temp_index_dir)
+
     response = client.get("/sync/delta?version=0")
     assert response.status_code == 200
     body = response.json()
     assert body["version"] == 0
-    assert body["files"] == []
+    assert body["new_record_ids"] == []
+    assert body["description"] == "no delta"

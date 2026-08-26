@@ -3,8 +3,8 @@
 ## Stare curentă
 
 - **Data ultimei actualizări:** 2026-08-27
-- **Faza curentă:** M3 — KMP client engine & local search MVP
-- **Progres general:** ~30% (T1.1–T1.3, T3.1–T3.2, T3.4, T4.1 finalizate; T3.3, T4.2–T4.5 rămân pending)
+- **Faza curentă:** M1 — Remote indexer pipeline finalizat; pregătire M2 (delta sync protocol)
+- **Progres general:** ~45% (T1.1–T1.6, T3.1–T3.2, T3.4, T4.1, T5.1, T5.3–T5.5 finalizate; T2.1–T2.2, T3.3, T4.2–T4.5, T5.2, T6.1–T6.4 rămân pending)
 
 ## Task-uri finalizate
 
@@ -14,10 +14,17 @@
 | T1.1 | Choose Remote Indexer runtime: Python vs Rust | 2026-08-26 |
 | T1.2 | Set up Docker container for Remote Indexer | 2026-08-26 |
 | T1.3 | Integrate LanceDB native core in Remote Indexer | 2026-08-26 |
+| T1.4 | Integrate ONNX Runtime for embedding inference | 2026-08-27 |
+| T1.5 | Implement storage connectors (local + stubs) | 2026-08-27 |
+| T1.6 | Implement indexing pipeline: scan, extract, embed, store | 2026-08-27 |
 | T3.1 | Create KMP project skeleton (Compose Desktop) | 2026-08-26 |
 | T3.2 | Implement Vault URI parser | 2026-08-26 |
 | T3.4 | Integrate local LanceDB in KMP (in-memory MVP) | 2026-08-27 |
 | T4.1 | Define VfsAdapter interface | 2026-08-26 |
+| T5.1 | Build floating search UI in Compose Desktop | 2026-08-27 |
+| T5.3 | Implement global hotkey manager (JNativeHook) | 2026-08-27 |
+| T5.4 | Implement system tray manager | 2026-08-27 |
+| T5.5 | Implement clipboard history manager | 2026-08-27 |
 
 ## Task-uri în progres
 
@@ -25,15 +32,14 @@ Niciunul.
 
 ## Task-uri următoare (prioritate)
 
-1. **T1.4** — Integrate ONNX Runtime for embedding inference
-2. **T1.5** — Implement storage connectors (local, NAS/SMB, S3, Dropbox, Google Drive)
-3. **T1.6** — Implement indexing pipeline: scan, extract, embed, store
-4. **T2.1** — Design delta sync protocol (HTTP2/gRPC)
-5. **T3.3** — Implement RemoteVaultManager with delta download
-6. **T4.2** — Implement LocalFileSystem VFS adapter
-8. **T4.3** — Implement Dropbox VFS adapter
-9. **T4.4** — Implement Google Drive VFS adapter
-10. **T4.5** — Implement NAS/SMB VFS adapter
+1. **T2.1** — Design delta sync protocol (HTTP2/gRPC)
+2. **T2.2** — Implement `/sync/delta` endpoint with real `.lance` delta streaming
+3. **T3.3** — Implement RemoteVaultManager with delta download
+4. **T4.2** — Implement LocalFileSystem VFS adapter
+5. **T4.3** — Implement Dropbox VFS adapter
+6. **T4.4** — Implement Google Drive VFS adapter
+7. **T4.5** — Implement NAS/SMB VFS adapter
+8. **T5.2** — Implement Add Remote Vault flow with trial gate
 
 ## Blockere
 
@@ -44,13 +50,16 @@ Niciunul.
 ## Note pentru următorul agent
 
 - Toate specificațiile sunt în `.agents/specs/`.
-- ADR 001 este acum **Accepted** și justifică alegerea Python 3.11.
+- ADR 001 este **Accepted** și justifică alegerea Python 3.11.
+- ADR 006 acceptat: pentru MVP, `OnnxEmbedder` folosește vectori pseudo-aleatorii deterministici de dimensiune 384 când nu există un model ONNX în `assets/models/`. Acest lucru permite testarea end-to-end a pipeline-ului fără descărcări de modele.
 - Graful de execuție complet este în `.agents/execution-graph/project-graph.json`.
 - Design tokens sunt în `.agents/design-tokens/design-system.md`.
-- Scheletul Remote Indexer este funcțional în `src/remote-indexer/`. T1.4–T1.6 rămân de implementat.
+- Pipeline-ul Remote Indexer este funcțional în `src/remote-indexer/`. Conectorii local, Dropbox, Google Drive și SMB/NAS sunt implementați; doar `LocalConnector` este complet, restul sunt stub-uri `NotImplementedError`.
+- `requirements.txt` include acum `pillow` și `pymupdf`.
+- `app/db.py` include `version` în schema LanceDB și helpers `get_latest_version()` / `bump_version()`.
+- `app/api/sync.py` returnează un delta MVP sub formă de listă de record IDs noi.
+- Teste: `pytest -v` în `src/remote-indexer/` — 7 passed.
 - Buildul KMP a fost re-verificat cu `JAVA_HOME=/tmp/jdk-21.0.5+11/Contents/Home ./gradlew build` — BUILD SUCCESSFUL.
-- `app/config.py` a fost ajustat pentru dezvoltare locală: `LANCEDB_URI` și `SOURCE_PATH` default la `./data/index` și `./data/source`.
-- Teste: `pytest -v` în `src/remote-indexer/` — 4 passed; `./gradlew jvmTest` în `src/client-kmp/` — toate testele trec.
 - ADR 005 acceptat: pentru clientul KMP se folosește un store vectorial in-memory MVP cu interfața `LocalVectorStore`, lăsând deschisă înlocuirea ulterioară cu LanceDB-JVM sau JNI.
 - Modulul `src/client-kmp/src/commonMain/kotlin/search/` conține `VectorRecord`, `SearchResult`, `LocalVectorStore`, `InMemoryVectorStore` și `SearchEngine`.
 - `SearchScreen` primește acum `SearchEngine` și afișează rezultate reale într-o listă lazy.
