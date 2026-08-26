@@ -2,7 +2,7 @@
 
 ## Status
 
-Pending
+Accepted
 
 ## Context
 
@@ -43,6 +43,16 @@ Trebuie ales între Python 3.11 și Rust.
 ## Decizie propusă
 
 **Python 3.11** pentru MVP, cu posibilitatea de a reevalua Rust pentru o variantă Enterprise de înaltă performanță.
+
+## Rationale
+
+Selectăm Python 3.11 pentru runtime-ul Remote Indexer în faza inițială deoarece:
+
+- Ecosistemul Python oferă suport matur și bine documentat pentru LanceDB, ONNX Runtime și conectori de stocare (fsspec).
+- Reduce timpul de dezvoltare al MVP-ului (T1.2–T1.6) și permite iterații rapide.
+- `python:3.11-slim` oferă un compromis bun între dimensiunea imaginii Docker și disponibilitatea pachetelor binare cu suport pentru AVX2/NEON.
+
+Se va reevalua trecerea la Rust după M2 dacă performanța sau dimensiunea imaginii Docker devin constrângeri critice.
 
 ## Consecințe
 

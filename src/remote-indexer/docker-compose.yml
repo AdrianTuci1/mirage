@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mirage/remote-indexer:latest
+    container_name: semantic-indexer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - VAULT_NAME=${VAULT_NAME:-Company-NAS}
+      - SYNC_INTERVAL_SEC=${SYNC_INTERVAL_SEC:-60}
+      - MAX_CPU_THREADS=${MAX_CPU_THREADS:-4}
+      - MAX_RAM_MB=${MAX_RAM_MB:-4096}
+      - SECRET_KEY=${SECRET_KEY:-generate_on_first_run}
+      - LANCEDB_URI=/data/index
+      - SOURCE_PATH=/data/source
+    volumes:
+      - /mnt/storage/nas_media:/data/source:ro
+      - ./vault_db:/data/index
