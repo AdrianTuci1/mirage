@@ -18,7 +18,7 @@ class DropboxVfsAdapter(private val oauthToken: String) : VfsAdapter {
 
     private val client = HttpClient(CIO)
 
-    override suspend fun fetchThumbnail(relativePath: String): ByteArray {
+    override suspend fun fetchThumbnail(relativePath: String): ByteArray? {
         // Dropbox content-download endpoint; path is passed as a header.
         val response = client.get("https://content.dropboxapi.com/2/files/get_thumbnail") {
             header("Dropbox-API-Arg", """{"path":"$relativePath"}""")

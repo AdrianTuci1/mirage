@@ -179,12 +179,12 @@
       "id": "T4.2",
       "title": "Implement LocalFileSystem VFS adapter",
       "module": "client-kmp",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M4",
       "depends_on": ["T4.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/adapters/LocalVfsAdapter.kt"],
-      "notes": "Use java.nio and Desktop API."
+      "outputs": ["src/client-kmp/src/jvmMain/kotlin/adapters/LocalVfsAdapter.kt", "src/client-kmp/src/jvmMain/kotlin/adapters/ThumbnailGenerator.kt"],
+      "notes": "Uses java.nio, Desktop API and AWT ImageIO for 64x64 PNG thumbnails."
     },
     {
       "id": "T4.3",

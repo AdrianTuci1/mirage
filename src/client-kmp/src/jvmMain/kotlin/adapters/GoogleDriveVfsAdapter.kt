@@ -17,7 +17,7 @@ class GoogleDriveVfsAdapter(private val oauthToken: String) : VfsAdapter {
 
     private val client = HttpClient(CIO)
 
-    override suspend fun fetchThumbnail(relativePath: String): ByteArray {
+    override suspend fun fetchThumbnail(relativePath: String): ByteArray? {
         // TODO(M4): resolve relativePath -> Drive fileId, then call /files/{id}?alt=media
         throw UnsupportedOperationException("GoogleDriveVfsAdapter thumbnail fetch is not implemented yet")
     }

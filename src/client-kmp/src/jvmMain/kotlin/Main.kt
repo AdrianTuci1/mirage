@@ -29,6 +29,7 @@ import mirage.desktop.ui.SettingsWindow
 import mirage.search.InMemoryVectorStore
 import mirage.search.SearchEngine
 import mirage.search.VectorRecord
+import mirage.vfs.adapters.LocalVfsAdapter
 
 fun main() = application {
     var isSearchVisible by remember { mutableStateOf(false) }
@@ -36,6 +37,7 @@ fun main() = application {
     val clipboardManager = remember { ClipboardManager() }
 
     val searchEngine = remember { createSearchEngineWithSeedData() }
+    val vfsAdapter = remember { LocalVfsAdapter(rootPath = System.getProperty("user.home")) }
 
     // Global hotkey toggles the floating search window (Ctrl/Cmd + Space).
     GlobalShortcutManager { isSearchVisible = !isSearchVisible }
@@ -82,6 +84,7 @@ fun main() = application {
                 ) {
                     SearchScreen(
                         searchEngine = searchEngine,
+                        vfsAdapter = vfsAdapter,
                         onOpenSettings = { isSettingsVisible = true }
                     )
                 }

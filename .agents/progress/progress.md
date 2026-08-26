@@ -67,3 +67,6 @@ Niciunul.
 - Adăugate `GlobalShortcutManager`, `ClipboardManager`, `SystemTrayManager` în `src/client-kmp/src/jvmMain/kotlin/platform/`.
 - UI flotant actualizat: shortcut `Ctrl/Cmd + Space`, poziționare pe ecranul activ, bară de stare cu "Start indexing" / "Add vault", fereastră Settings separată.
 - Fereastra de onboarding rămâne pentru mai târziu (nu e prioritar acum).
+- Pipeline de indexare remote implementat pentru fișiere locale și imagini (T1.4–T1.6 completate); folosește embeddings deterministice MVP.
+- Adaptorul VFS local cu thumbnail (T4.2) și UI de preview pentru imagini/video/documente implementate.
+- Teste: `pytest -v` — 7 passed; `./gradlew jvmTest` — BUILD SUCCESSFUL.

@@ -45,6 +45,7 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(compose.desktop.currentOs)
+                implementation(compose.materialIconsExtended)
                 implementation("io.ktor:ktor-client-cio:3.0.3")
 
                 // Global hotkeys on macOS/Windows/Linux. Requires Accessibility

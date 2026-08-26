@@ -12,10 +12,10 @@ interface VfsAdapter {
     /**
      * Fetches a thumbnail/preview for the file at [relativePath].
      *
-     * Throws [UnsupportedOperationException] if the adapter does not support
-     * thumbnail generation.
+     * Returns `null` when a thumbnail cannot be generated for the file type or
+     * when the adapter does not support thumbnail generation.
      */
-    suspend fun fetchThumbnail(relativePath: String): ByteArray
+    suspend fun fetchThumbnail(relativePath: String): ByteArray?
 
     /**
      * Opens the file at [relativePath] using the platform's default handler.

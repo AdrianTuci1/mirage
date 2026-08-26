@@ -30,7 +30,7 @@ data class SmbCredentials(
  */
 class NasSmbVfsAdapter(private val credentials: SmbCredentials) : VfsAdapter {
 
-    override suspend fun fetchThumbnail(relativePath: String): ByteArray {
+    override suspend fun fetchThumbnail(relativePath: String): ByteArray? {
         throw UnsupportedOperationException("NasSmbVfsAdapter thumbnail fetch is not implemented yet")
     }
 
