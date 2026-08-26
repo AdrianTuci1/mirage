@@ -48,3 +48,5 @@ Niciunul.
 - Graful de execuție complet este în `.agents/execution-graph/project-graph.json`.
 - Design tokens sunt în `.agents/design-tokens/design-system.md`.
 - Scheletul Remote Indexer este funcțional în `src/remote-indexer/`. T1.4–T1.6 rămân de implementat.
+- Buildul KMP a fost re-verificat cu `JAVA_HOME=/tmp/jdk-21.0.5+11/Contents/Home ./gradlew build` — BUILD SUCCESSFUL.
+- `app/config.py` a fost ajustat pentru dezvoltare locală: `LANCEDB_URI` și `SOURCE_PATH` default la `./data/index` și `./data/source`.

@@ -9,8 +9,9 @@ class Settings:
     max_cpu_threads: int = int(os.environ.get("MAX_CPU_THREADS", "4"))
     max_ram_mb: int = int(os.environ.get("MAX_RAM_MB", "4096"))
     secret_key: str = os.environ.get("SECRET_KEY", "generate_on_first_run")
-    lancedb_uri: str = os.environ.get("LANCEDB_URI", "/data/index")
-    source_path: str = os.environ.get("SOURCE_PATH", "/data/source")
+    # Default to local ./data/index for development; override in Docker via env.
+    lancedb_uri: str = os.environ.get("LANCEDB_URI", "./data/index")
+    source_path: str = os.environ.get("SOURCE_PATH", "./data/source")
 
 
 settings = Settings()

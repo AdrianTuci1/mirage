@@ -42,6 +42,35 @@ Mirage este un motor de căutare semantică **local-first** pentru fișiere pers
 
 Licențierea este **offline**, bazată pe ED25519 — fără conturi sau server central.
 
+## Dezvoltare locală
+
+### Remote Indexer
+
+```bash
+cd src/remote-indexer
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 127.0.0.1 --port 8080
+```
+
+Endpoint-uri:
+- `GET /health`
+- `GET /sync/delta?version={n}`
+
+### Client desktop (KMP + Compose Desktop)
+
+Necesită JDK 21 (Gradle 8.14 nu suportă JDK 26). Dacă sistemul are doar JDK 26:
+
+```bash
+# Opțiunea A: folosește un JDK 21 descărcat temporar
+export JAVA_HOME=/tmp/jdk-21.0.5+11/Contents/Home
+
+# Opțiunea B: instalează Temurin 21
+cd src/client-kmp
+./gradlew build
+```
+
 ## Documentație
 
 Toate specificațiile, deciziile și planul de execuție sunt în folderul `.agents/`.
