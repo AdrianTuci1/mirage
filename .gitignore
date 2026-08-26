@@ -1,0 +1,60 @@
+# Build outputs
+build/
+dist/
+out/
+*.jar
+*.war
+*.ear
+
+# Gradle
+.gradle/
+gradle/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+*.env
+
+# Rust
+target/
+Cargo.lock
+
+# Docker
+*.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test & coverage
+.coverage/
+htmlcov/
+.pytest_cache/
+
+# LanceDB local data
+*.lance/
+lancedb_data/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
