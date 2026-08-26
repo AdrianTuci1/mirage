@@ -164,10 +164,12 @@ Clientul nu este o aplicație desktop tradițională cu fereastră permanentă, 
 
 #### 3.4.1 Componente OS
 
-- **Global Shortcut Manager**: ascultă o combinație globală de taste (ex: `Cmd/Ctrl + Shift + Space`) folosind JNativeHook.
-- **Floating Search Window**: fereastră compactă, centrată pe ecran, fără decorațiuni, afișată/ascunsă la activarea scurtăturii.
+- **Global Shortcut Manager**: ascultă o combinație globală de taste (`Ctrl + Space` pe Windows/Linux, `Cmd + Space` pe macOS) folosind JNativeHook.
+- **Floating Search Window**: fereastră compactă, centrată pe ecranul activ (cursorul mouse-ului), fără decorațiuni, afișată/ascunsă la activarea scurtăturii.
 - **System Tray**: iconiță în bara de meniu/sistem cu opțiuni Show / Settings / Quit.
 - **Clipboard Manager**: istoric al clipboard-ului local, indexabil și căutabil (opțional activabil).
+- **Settings Window**: fereastră separată pentru vaulturi, indexare, scurtături și licențiere.
+- **Empty state**: bară de stare sub search input care arată procentul indexat și butoane rapide "Start indexing" / "Add vault".
 
 #### 3.4.2 Stack UI
 

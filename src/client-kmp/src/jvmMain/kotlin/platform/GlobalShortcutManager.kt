@@ -15,7 +15,7 @@ import java.util.logging.Logger
 /**
  * Registers a global hotkey using JNativeHook and invokes [onHotkey] when pressed.
  *
- * Default combo: Cmd (macOS) / Ctrl (Windows/Linux) + Shift + Space.
+ * Default combo: Cmd (macOS) / Ctrl (Windows/Linux) + Space.
  *
  * On macOS the packaged app needs Accessibility permission.
  */
@@ -72,8 +72,8 @@ private fun isHotkey(event: NativeKeyEvent): Boolean {
     } else {
         (modifiers and NativeInputEvent.CTRL_MASK) != 0
     }
-    val hasShift = (modifiers and NativeInputEvent.SHIFT_MASK) != 0
-    return hasModifier && hasShift && event.keyCode == NativeKeyEvent.VC_SPACE
+    // No Shift requirement — plain Cmd/Ctrl + Space
+    return hasModifier && event.keyCode == NativeKeyEvent.VC_SPACE
 }
 
 private fun isMac(): Boolean =

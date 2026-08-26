@@ -216,12 +216,12 @@
       "id": "T5.1",
       "title": "Build floating search UI in Compose Desktop",
       "module": "client-kmp",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M5",
       "depends_on": ["T3.4", "T4.1"],
       "outputs": ["src/client-kmp/src/commonMain/kotlin/ui/SearchScreen.kt", "src/client-kmp/src/jvmMain/kotlin/Main.kt"],
-      "notes": "Spotlight/Raycast-style floating window: search input, results list, preview thumbnails, Esc to hide."
+      "notes": "Spotlight/Raycast-style floating window: search input, status bar with Start indexing / Add vault buttons, Esc to hide, multi-monitor centering."
     },
     {
       "id": "T5.3",

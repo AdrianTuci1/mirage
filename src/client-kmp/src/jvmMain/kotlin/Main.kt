@@ -23,14 +23,17 @@ import androidx.compose.ui.window.rememberWindowState
 import mirage.desktop.platform.ClipboardManager
 import mirage.desktop.platform.GlobalShortcutManager
 import mirage.desktop.platform.SystemTrayManager
+import mirage.desktop.platform.centerOnActiveScreen
 import mirage.desktop.ui.SearchScreen
+import mirage.desktop.ui.SettingsWindow
 
 fun main() = application {
-    var isVisible by remember { mutableStateOf(true) }
+    var isSearchVisible by remember { mutableStateOf(false) }
+    var isSettingsVisible by remember { mutableStateOf(false) }
     val clipboardManager = remember { ClipboardManager() }
 
-    // Global hotkey toggles the floating search window.
-    GlobalShortcutManager { isVisible = !isVisible }
+    // Global hotkey toggles the floating search window (Ctrl/Cmd + Space).
+    GlobalShortcutManager { isSearchVisible = !isSearchVisible }
 
     // Clipboard history polling.
     clipboardManager.PollingEffect()
@@ -38,14 +41,15 @@ fun main() = application {
     // System tray icon.
     SystemTrayManager(
         tooltip = "Mirage",
-        onShow = { isVisible = true },
-        onSettings = { /* TODO: open settings window */ },
+        onShow = { isSearchVisible = true },
+        onSettings = { isSettingsVisible = true },
         onQuit = ::exitApplication
     )
 
-    if (isVisible) {
+    if (isSearchVisible) {
+        val (x, y) = remember { centerOnActiveScreen(720.dp, 480.dp) }
         Window(
-            onCloseRequest = { isVisible = false },
+            onCloseRequest = { isSearchVisible = false },
             title = "Mirage",
             transparent = true,
             undecorated = true,
@@ -54,11 +58,11 @@ fun main() = application {
             state = rememberWindowState(
                 width = 720.dp,
                 height = 480.dp,
-                position = WindowPosition.Aligned(alignment = Alignment.Center)
+                position = WindowPosition(x.dp, y.dp)
             ),
             onPreviewKeyEvent = { event ->
                 if (event.key == Key.Escape && event.type == KeyEventType.KeyUp) {
-                    isVisible = false
+                    isSearchVisible = false
                     true
                 } else {
                     false
@@ -71,9 +75,18 @@ fun main() = application {
                     shape = RoundedCornerShape(16.dp),
                     shadowElevation = 8.dp
                 ) {
-                    SearchScreen()
+                    SearchScreen(
+                        onOpenSettings = { isSettingsVisible = true }
+                    )
                 }
             }
         }
+    }
+
+    if (isSettingsVisible) {
+        SettingsWindow(
+            onClose = { isSettingsVisible = false },
+            onQuit = ::exitApplication
+        )
     }
 }

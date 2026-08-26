@@ -12,8 +12,8 @@ Inițial, Mirage era descris ca o aplicație desktop clasică cu fereastră perm
 
 Mirage va fi un **global search launcher** pentru desktop:
 
-- **Global hotkey** (`Cmd/Ctrl + Shift + Space` implicit) pentru deschidere rapidă.
-- **Fereastră flotantă** compactă, centrată, fără decorațiuni, afișată/ascunsă la hotkey sau click în afară.
+- **Global hotkey** (`Ctrl + Space` pe Windows/Linux, `Cmd + Space` pe macOS; configurabil) pentru toggle rapid.
+- **Fereastră flotantă** compactă, centrată pe ecranul activ (cel cu cursorul mouse-ului), fără decorațiuni, afișată/ascunsă la hotkey.
 - **System tray icon** pentru acces la Settings / Quit.
 - **Clipboard history** indexabil și căutabil (feature opțional, activabil din setări).
 

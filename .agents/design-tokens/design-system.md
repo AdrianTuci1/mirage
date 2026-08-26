@@ -54,11 +54,19 @@
 - `--spacing-md`: 16dp
 - `--spacing-lg`: 24dp
 
+## Dimensiuni ferestre
+
+- **Spotlight window**: 720dp × 480dp, centrat pe ecranul activ, 1/3 din înălțime de sus.
+- **Settings window**: 640dp × 520dp, fereastră normală, centrat pe ecranul primar.
+- **Corner radius**: 16dp pentru fereastra flotantă, 12dp pentru input-uri.
+
 ## Componente cheie
 
-- **SearchBar**: fundal `--bg-tertiary`, iconiță de căutare, clear button.
+- **SearchBar**: fundal `--bg-tertiary`, iconiță de căutare, clear button, buton Settings dreapta.
 - **ResultCard**: thumbnail stânga, titlu + path + sursă, hover accent.
 - **VaultBadge**: indică sursa (`local`, `nas`, `dropbox`, `gdrive`).
+- **StatusBar**: sub search — procent indexat + butoane "Start indexing" / "Add vault".
+- **EmptyState**: mesaj centrat "Start typing to search".
 - **LicenseDialog**: trial counter + input license key + validate button.
 
 ## Iconițe

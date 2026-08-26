@@ -53,3 +53,5 @@ Niciunul.
 - Teste: `pytest -v` în `src/remote-indexer/` — 4 passed; `./gradlew jvmTest` în `src/client-kmp/` — toate testele trec.
 - ADR 004 acceptat: Mirage va fi un launcher global Spotlight/Raycast-style cu global hotkey, fereastră flotantă, system tray și clipboard history.
 - Adăugate `GlobalShortcutManager`, `ClipboardManager`, `SystemTrayManager` în `src/client-kmp/src/jvmMain/kotlin/platform/`.
+- UI flotant actualizat: shortcut `Ctrl/Cmd + Space`, poziționare pe ecranul activ, bară de stare cu "Start indexing" / "Add vault", fereastră Settings separată.
+- Fereastra de onboarding rămâne pentru mai târziu (nu e prioritar acum).
