@@ -14,11 +14,11 @@ import mirage.search.SearchEngine
 import mirage.search.VectorRecord
 
 /**
- * Manages connection to a remote Mirage vault and synchronises its delta
+ * Manages connection to a remote Mirage server and synchronises its delta
  * index into the local [SearchEngine] vector store.
  */
 open class RemoteVaultManager(
-    private val config: RemoteVaultConfig,
+    private val connection: ServerConnection,
     private val searchEngine: SearchEngine
 ) {
 
@@ -40,9 +40,10 @@ open class RemoteVaultManager(
     suspend fun syncDeltaIndex(): Boolean {
         val lastVersion = searchEngine.store.latestVersion()
 
-        val response = client.get("http://${config.host}:${config.port}/sync/delta") {
+        val scheme = if (connection.isHttps) "https" else "http"
+        val response = client.get("$scheme://${connection.host}:${connection.port}/sync/delta") {
             parameter("version", lastVersion.toString())
-            header("Authorization", "Bearer ${config.passkey}")
+            header("Authorization", "Bearer ${connection.passkey}")
         }
 
         val records = parseNdjson(response.bodyAsText())

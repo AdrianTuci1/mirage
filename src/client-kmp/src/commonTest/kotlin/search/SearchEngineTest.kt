@@ -1,8 +1,10 @@
 package mirage.search
 
 import kotlinx.coroutines.test.runTest
+import mirage.ai.LocalEmbedder
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class SearchEngineTest {
 
@@ -122,4 +124,44 @@ class SearchEngineTest {
         )
         assertEquals(1, engine.indexedCount)
     }
+
+    @Test
+    fun `search with embedder uses cosine similarity`() = runTest {
+        val engine = SearchEngine(InMemoryVectorStore(), embedder = FakeEmbedder())
+        engine.index(
+            VectorRecord(
+                id = "near",
+                relativePath = "cat.txt",
+                sourceType = "local",
+                vector = listOf(3f, 99f, 0f),
+                updatedAt = now
+            )
+        )
+        engine.index(
+            VectorRecord(
+                id = "far",
+                relativePath = "other.txt",
+                sourceType = "local",
+                vector = listOf(10f, 50f, 0f),
+                updatedAt = now
+            )
+        )
+
+        val results = engine.search("cat")
+
+        assertEquals(2, results.size)
+        assertEquals("near", results[0].id)
+        assertTrue(results[0].score > results[1].score)
+    }
+}
+
+private class FakeEmbedder : LocalEmbedder {
+    override suspend fun embedText(text: String): List<Float> =
+        listOf(
+            text.length.toFloat(),
+            text.firstOrNull()?.code?.toFloat() ?: 0f,
+            0f
+        )
+
+    override suspend fun embedImage(imageBytes: ByteArray): List<Float>? = null
 }

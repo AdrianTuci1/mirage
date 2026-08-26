@@ -83,6 +83,7 @@ fun SearchScreen(
     searchEngine: SearchEngine,
     vfsAdapter: VfsAdapter,
     onOpenSettings: () -> Unit = {},
+    onAddServer: () -> Unit = {},
     onSync: suspend () -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
@@ -149,7 +150,7 @@ fun SearchScreen(
             StatusBar(
                 indexedCount = searchEngine.indexedCount,
                 onStartIndexing = { /* TODO: trigger local indexing */ },
-                onAddCloudVault = { /* TODO: open Add Vault flow */ },
+                onAddServer = onAddServer,
                 onSync = {
                     scope.launch {
                         onSync()
@@ -555,7 +556,7 @@ private fun EmptyResults(query: String) {
 private fun StatusBar(
     indexedCount: Int,
     onStartIndexing: () -> Unit,
-    onAddCloudVault: () -> Unit,
+    onAddServer: () -> Unit,
     onSync: () -> Unit
 ) {
     Row(
@@ -575,8 +576,8 @@ private fun StatusBar(
             TextButton(onClick = onSync) {
                 Text("Sync")
             }
-            Button(onClick = onAddCloudVault) {
-                Text("Add vault")
+            Button(onClick = onAddServer) {
+                Text("Add server")
             }
         }
     }

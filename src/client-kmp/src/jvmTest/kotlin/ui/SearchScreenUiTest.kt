@@ -26,7 +26,7 @@ class SearchScreenUiTest {
         onNodeWithText("0 indexed").assertIsDisplayed()
         onNodeWithText("Start indexing").assertIsDisplayed()
         onNodeWithText("Sync").assertIsDisplayed()
-        onNodeWithText("Add vault").assertIsDisplayed()
+        onNodeWithText("Add server").assertIsDisplayed()
     }
 
 }

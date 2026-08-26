@@ -3,8 +3,8 @@
 ## Stare curentă
 
 - **Data ultimei actualizări:** 2026-08-27
-- **Faza curentă:** M3 — KMP client engine & Vault URI parser; delta sync implementat
-- **Progres general:** ~55% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1, T5.3–T5.5 finalizate; T4.3–T4.5, T5.2, T8.1–T8.3 rămân pending)
+- **Faza curentă:** M8 — Local AI models (embeddings, vision, translator)
+- **Progres general:** ~70% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1–T5.5, T8.1–T8.4 finalizate; T4.3–T4.5 rămân pending)
 
 ## Task-uri finalizate
 
@@ -25,9 +25,14 @@
 | T3.4 | Integrate local LanceDB in KMP (in-memory MVP) | 2026-08-27 |
 | T4.1 | Define VfsAdapter interface | 2026-08-26 |
 | T5.1 | Build floating search UI in Compose Desktop | 2026-08-27 |
+| T5.2 | Implement Add Server flow with server code | 2026-08-27 |
 | T5.3 | Implement global hotkey manager (JNativeHook) | 2026-08-27 |
 | T5.4 | Implement system tray manager | 2026-08-27 |
 | T5.5 | Implement clipboard history manager | 2026-08-27 |
+| T8.1 | Add ONNX Runtime Java dependency to KMP | 2026-08-27 |
+| T8.2 | Implement local text embedder for KMP | 2026-08-27 |
+| T8.3 | Wire local embedder into SearchEngine for real vector search | 2026-08-27 |
+| T8.4 | Add local vision and translator stubs | 2026-08-27 |
 
 ## Task-uri în progres
 
@@ -35,13 +40,9 @@ Niciunul.
 
 ## Task-uri următoare (prioritate)
 
-1. **T5.2** — Implement Add Server flow with server code (înlocuiește Add Remote Vault + licensing)
-2. **T8.1** — Add ONNX Runtime Java dependency to KMP
-3. **T8.2** — Implement local text embedder for KMP
-4. **T8.3** — Wire local embedder into SearchEngine for real vector search
-5. **T4.3** — Implement Dropbox VFS adapter
-6. **T4.4** — Implement Google Drive VFS adapter
-7. **T4.5** — Implement NAS/SMB VFS adapter
+1. **T4.3** — Implement Dropbox VFS adapter
+2. **T4.4** — Implement Google Drive VFS adapter
+3. **T4.5** — Implement NAS/SMB VFS adapter
 
 ## Blockere
 
@@ -53,7 +54,8 @@ Niciunul.
 
 - Toate specificațiile sunt în `.agents/specs/`.
 - ADR 001 este **Accepted** și justifică alegerea Python 3.11.
-- ADR 006 acceptat: pentru MVP, `OnnxEmbedder` folosește vectori pseudo-aleatorii deterministici de dimensiune 384 când nu există un model ONNX în `assets/models/`. Acest lucru permite testarea end-to-end a pipeline-ului fără descărcări de modele.
+- ADR 006 acceptat: pentru MVP, `OnnxEmbedder` folosește vectori pseudo-aleatorii deterministici de dimensiune 384 când nu există un model ONNX în `~/.mirage/models/`. Acest lucru permite testarea end-to-end a pipeline-ului fără descărcări de modele.
+- Implementat T8.1–T8.4: ONNX Runtime 1.19.0 adăugat în `src/client-kmp/build.gradle.kts`, `LocalEmbedder`/ `OnnxRuntimeEmbedder` în `src/client-kmp/src/jvmMain/kotlin/ai/`, interfața `LocalEmbedder` expusă în `commonMain` pentru `SearchEngine`, stub-uri `LocalVision` și `LocalTranslator` adăugate. Build și `jvmTest` trec.
 - Graful de execuție complet este în `.agents/execution-graph/project-graph.json`.
 - Design tokens sunt în `.agents/design-tokens/design-system.md`.
 - Pipeline-ul Remote Indexer este funcțional în `src/remote-indexer/`. Conectorii local, Dropbox, Google Drive și SMB/NAS sunt implementați; doar `LocalConnector` este complet, restul sunt stub-uri `NotImplementedError`.
@@ -75,4 +77,5 @@ Niciunul.
 - Implementat T3.3: `RemoteVaultManager` sincronizează delta NDJSON de la `/sync/delta` și aplică înregistrările în `LocalVectorStore` prin `SearchEngine`. Teste adăugate pentru sync cu înregistrări, delta gol și eroare de autentificare.
 - `LocalVectorStore` expune acum `upsertAll()` și `latestVersion()`; `VectorRecord` include câmpul `version`; `SearchEngine` expune store-ul subiacent.
 - UI actualizat cu buton "Sync" în bara de stare; la finalizare se reîmprospătează rezultatele.
+- Implementat T5.2: flow-ul Add Server cu URL + code sau Vault URI complet; `ServerConnection` abstractizează conexiunea, iar `RemoteVaultManager` folosește flag-ul HTTPS. SettingsWindow include acum secțiunea Servers cu serverele conectate.
 - Teste: `pytest -v` — 7 passed; `./gradlew jvmTest` — BUILD SUCCESSFUL.

@@ -20,7 +20,7 @@ class RemoteVaultManagerTest {
 
     @Test
     fun `syncDeltaIndex fetches delta and applies records`() = runTest {
-        val config = createConfig()
+        val connection = createConnection()
         val store = InMemoryVectorStore()
         val searchEngine = SearchEngine(store)
 
@@ -36,6 +36,7 @@ class RemoteVaultManagerTest {
         val mockEngine = MockEngine { request ->
             assertEquals("0", request.url.parameters["version"])
             assertEquals("Bearer sec_pk_abc", request.headers["Authorization"])
+            assertTrue(request.url.toString().startsWith("http://"))
             respond(
                 content = ByteReadChannel(ndjson),
                 status = HttpStatusCode.OK,
@@ -43,7 +44,7 @@ class RemoteVaultManagerTest {
             )
         }
 
-        val manager = TestRemoteVaultManager(config, searchEngine, HttpClient(mockEngine))
+        val manager = TestRemoteVaultManager(connection, searchEngine, HttpClient(mockEngine))
         val synced = manager.syncDeltaIndex()
 
         assertTrue(synced)
@@ -54,7 +55,7 @@ class RemoteVaultManagerTest {
 
     @Test
     fun `syncDeltaIndex returns false for empty delta`() = runTest {
-        val config = createConfig()
+        val connection = createConnection()
         val searchEngine = SearchEngine(InMemoryVectorStore())
 
         val mockEngine = MockEngine { _ ->
@@ -65,7 +66,7 @@ class RemoteVaultManagerTest {
             )
         }
 
-        val manager = TestRemoteVaultManager(config, searchEngine, HttpClient(mockEngine))
+        val manager = TestRemoteVaultManager(connection, searchEngine, HttpClient(mockEngine))
         val synced = manager.syncDeltaIndex()
 
         assertFalse(synced)
@@ -74,34 +75,53 @@ class RemoteVaultManagerTest {
 
     @Test
     fun `syncDeltaIndex propagates auth errors`() = runTest {
-        val config = createConfig().copy(passkey = "wrong-key")
+        val connection = createConnection().copy(passkey = "wrong-key")
         val searchEngine = SearchEngine(InMemoryVectorStore())
 
         val mockEngine = MockEngine { _ ->
             respondBadRequest()
         }
 
-        val manager = TestRemoteVaultManager(config, searchEngine, HttpClient(mockEngine) { expectSuccess = true })
+        val manager = TestRemoteVaultManager(connection, searchEngine, HttpClient(mockEngine) { expectSuccess = true })
 
         val result = runCatching { manager.syncDeltaIndex() }
         assertTrue(result.isFailure, "Expected syncDeltaIndex to fail on HTTP 400")
     }
 
-    private fun createConfig() = RemoteVaultConfig(
+    @Test
+    fun `syncDeltaIndex uses HTTPS when configured`() = runTest {
+        val connection = createConnection().copy(isHttps = true)
+        val searchEngine = SearchEngine(InMemoryVectorStore())
+
+        val mockEngine = MockEngine { request ->
+            assertTrue(request.url.toString().startsWith("https://"))
+            respond(
+                content = ByteReadChannel(""),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/x-ndjson")
+            )
+        }
+
+        val manager = TestRemoteVaultManager(connection, searchEngine, HttpClient(mockEngine))
+        manager.syncDeltaIndex()
+    }
+
+    private fun createConnection() = ServerConnection(
         host = "192.168.1.100",
         port = 8080,
         vaultId = "company_nas",
-        passkey = "sec_pk_abc"
+        passkey = "sec_pk_abc",
+        isHttps = false
     )
 
     /**
      * Testable subclass that allows injecting a mock HttpClient.
      */
     private class TestRemoteVaultManager(
-        config: RemoteVaultConfig,
+        connection: ServerConnection,
         searchEngine: SearchEngine,
         private val mockClient: HttpClient
-    ) : RemoteVaultManager(config, searchEngine) {
+    ) : RemoteVaultManager(connection, searchEngine) {
 
         override val client: HttpClient
             get() = mockClient

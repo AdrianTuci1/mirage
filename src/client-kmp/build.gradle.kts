@@ -48,6 +48,9 @@ kotlin {
                 implementation(compose.materialIconsExtended)
                 implementation("io.ktor:ktor-client-cio:3.0.3")
 
+                // ONNX Runtime for local text/vision/translator inference.
+                implementation("com.microsoft.onnxruntime:onnxruntime:1.19.0")
+
                 // Global hotkeys on macOS/Windows/Linux. Requires Accessibility
                 // permission on macOS when running packaged apps.
                 implementation("com.github.kwhat:jnativehook:2.2.2")

@@ -1,14 +1,18 @@
 package mirage.search
 
+import mirage.ai.LocalEmbedder
+
 /**
  * High-level search facade used by the UI.
  *
- * The current implementation uses heuristic text scoring because the client
- * does not yet run ONNX embedding inference. The `search` function is
- * `suspend` to keep the API future-proof for network/disk-backed stores.
+ * When a [LocalEmbedder] is provided, queries are embedded and searched with
+ * cosine similarity. Otherwise the engine falls back to heuristic text scoring.
+ * The `search` function is `suspend` to keep the API future-proof for
+ * network/disk-backed stores and embedding models.
  */
 class SearchEngine(
     val store: LocalVectorStore,
+    val embedder: LocalEmbedder? = null,
     var totalRecords: Int = 0
 ) {
 
@@ -23,9 +27,11 @@ class SearchEngine(
     }
 
     /**
-     * Returns records matching [query] using a heuristic text score.
+     * Returns records matching [query].
      *
-     * If [query] is blank, records are sorted by [VectorRecord.updatedAt]
+     * If an embedder is available the query is embedded and the top 20 results
+     * are returned using cosine similarity. Otherwise a heuristic text score is
+     * used. If [query] is blank, records are sorted by [VectorRecord.updatedAt]
      * descending (most recent first).
      */
     suspend fun search(query: String): List<SearchResult> {
@@ -37,6 +43,12 @@ class SearchEngine(
             return records
                 .sortedByDescending { it.updatedAt }
                 .map { it.toSearchResult(score = 0.0) }
+        }
+
+        val activeEmbedder = embedder
+        if (activeEmbedder != null) {
+            val queryVector = activeEmbedder.embedText(trimmed)
+            return store.query(queryVector, topK = 20)
         }
 
         val queryLower = trimmed.lowercase()
