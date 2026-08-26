@@ -3,8 +3,8 @@
 ## Stare curentă
 
 - **Data ultimei actualizări:** 2026-08-27
-- **Faza curentă:** M8–M9 — Local AI + Rust daemon planning
-- **Progres general:** ~65% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1–T5.5, T8.1–T8.4 finalizate; T4.3–T4.5, T9.1–T9.6, T10.1–T10.3, T11.1–T11.2, T12.1–T12.2 rămân pending)
+- **Faza curentă:** M9 — Rust Core Daemon + IPC
+- **Progres general:** ~68% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1–T5.5, T8.1–T8.4, T9.1–T9.2 finalizate; T4.3–T4.5, T9.3–T9.6, T10.1–T10.3, T11.1–T11.2, T12.1–T12.2 rămân pending)
 
 ## Task-uri finalizate
 
@@ -33,6 +33,8 @@
 | T8.2 | Implement local text embedder for KMP | 2026-08-27 |
 | T8.3 | Wire local embedder into SearchEngine for real vector search | 2026-08-27 |
 | T8.4 | Add local vision and translator stubs | 2026-08-27 |
+| T9.1 | Set up Rust daemon project skeleton | 2026-08-27 |
+| T9.2 | Implement IPC server (Unix socket + named pipe) | 2026-08-27 |
 
 ## Task-uri în progres
 
@@ -40,10 +42,10 @@ Niciunul.
 
 ## Task-uri următoare (prioritate)
 
-1. **T9.1** — Set up Rust daemon project skeleton
-2. **T9.2** — Implement IPC server (Unix socket + named pipe)
-3. **T9.3** — Integrate LanceDB Rust + vector search
-4. **T9.4** — Implement search RPC method
+1. **T9.3** — Integrate LanceDB Rust + vector search
+2. **T9.4** — Implement search RPC method
+3. **T9.5** — Integrate ONNX Runtime Rust for local embeddings
+4. **T9.6** — Implement DuckDB analytics engine
 5. **T10.1** — Build Mirage CLI binary
 6. **T10.2** — Implement mirage search / query / status commands
 7. **T10.3** — Implement mirage mcp serve
@@ -72,6 +74,11 @@ Niciunul.
 - ADR 003 actualizat și acceptat: pentru MVP se folosește NDJSON streaming în loc de fișiere `.lance` brute; gRPC/HTTP2 rămân opțiuni pentru etape ulterioare.
 - Teste: `pytest -v` în `src/remote-indexer/` — 9 passed (adăugate `test_sync_delta_returns_records`, `test_sync_delta_empty_when_up_to_date`, `test_sync_delta_rejects_missing_auth`).
 - Buildul KMP a fost re-verificat cu `JAVA_HOME=/tmp/jdk-21.0.5+11/Contents/Home ./gradlew build` — BUILD SUCCESSFUL.
+- Implementat T9.1–T9.2: proiect Rust `mirage-daemon` în `src/daemon/` cu `Cargo.toml`, `main.rs`, `lib.rs`, `config.rs`, `logging.rs`, `models/`, și modulul `ipc/` (`server.rs`, `protocol.rs`, `client.rs`, `mod.rs`).
+- Configul `DaemonConfig` folosește căi relative la directorul executabilului (`std::env::current_exe().parent()`), nu `~/.mirage`, cu `load()` / `save()` YAML și JSON.
+- IPC server implementează JSON-RPC 2.0 peste Unix Domain Socket (macOS/Linux) și Named Pipes (Windows), cu handler-e `ping` → `pong` și `status` → `{status: ok, version: 0.1.0}`.
+- Test de integrare `tests/ipc_ping.rs` pornește daemon-ul, conectează socket-ul și verifică răspunsul `pong`; trece pe macOS.
+- Build și teste: `cargo build` și `cargo test` trec în `src/daemon/` (3 unit tests + 1 integration test).
 - ADR 005 acceptat: pentru clientul KMP se folosește un store vectorial in-memory MVP cu interfața `LocalVectorStore`, lăsând deschisă înlocuirea ulterioară cu LanceDB-JVM sau JNI.
 - Modulul `src/client-kmp/src/commonMain/kotlin/search/` conține `VectorRecord`, `SearchResult`, `LocalVectorStore`, `InMemoryVectorStore` și `SearchEngine`.
 - `SearchScreen` primește acum `SearchEngine` și afișează rezultate reale într-o listă lazy.

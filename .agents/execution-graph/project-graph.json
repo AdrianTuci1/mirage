@@ -379,23 +379,23 @@
       "id": "T9.1",
       "title": "Set up Rust daemon project skeleton",
       "module": "daemon",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M9",
       "depends_on": ["T0.1"],
-      "outputs": ["src/daemon/Cargo.toml", "src/daemon/src/main.rs"],
-      "notes": "Cargo workspace, logging, config loading, CLI args."
+      "outputs": ["src/daemon/Cargo.toml", "src/daemon/src/main.rs", "src/daemon/src/config.rs", "src/daemon/src/logging.rs", "src/daemon/src/models/mod.rs"],
+      "notes": "Cargo project, logging, config loading, CLI args, shared models."
     },
     {
       "id": "T9.2",
       "title": "Implement IPC server (Unix socket + named pipe)",
       "module": "daemon",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M9",
       "depends_on": ["T9.1"],
-      "outputs": ["src/daemon/src/ipc.rs"],
-      "notes": "JSON-RPC framing over Unix Domain Socket / Named Pipe."
+      "outputs": ["src/daemon/src/ipc/server.rs", "src/daemon/src/ipc/protocol.rs", "src/daemon/src/ipc/client.rs", "src/daemon/src/ipc/mod.rs", "src/daemon/tests/ipc_ping.rs"],
+      "notes": "JSON-RPC framing over Unix Domain Socket / Named Pipe; ping/status handlers; integration test passes on macOS."
     },
     {
       "id": "T9.3",
