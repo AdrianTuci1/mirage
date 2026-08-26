@@ -51,3 +51,5 @@ Niciunul.
 - Buildul KMP a fost re-verificat cu `JAVA_HOME=/tmp/jdk-21.0.5+11/Contents/Home ./gradlew build` — BUILD SUCCESSFUL.
 - `app/config.py` a fost ajustat pentru dezvoltare locală: `LANCEDB_URI` și `SOURCE_PATH` default la `./data/index` și `./data/source`.
 - Teste: `pytest -v` în `src/remote-indexer/` — 4 passed; `./gradlew jvmTest` în `src/client-kmp/` — toate testele trec.
+- ADR 004 acceptat: Mirage va fi un launcher global Spotlight/Raycast-style cu global hotkey, fereastră flotantă, system tray și clipboard history.
+- Adăugate `GlobalShortcutManager`, `ClipboardManager`, `SystemTrayManager` în `src/client-kmp/src/jvmMain/kotlin/platform/`.

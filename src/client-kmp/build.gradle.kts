@@ -14,6 +14,12 @@ repositories {
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
 
+// IMPORTANT: Imports in Kotlin source are `androidx.compose.*` because Compose
+// Multiplatform (JetBrains) shares the same API surface with Jetpack Compose.
+// The resolved artifacts are `org.jetbrains.compose.*` and include desktop
+// JVM targets for Windows, macOS and Linux. We do NOT depend on Android-only
+// androidx.compose artifacts.
+
 kotlin {
     jvm()
 
@@ -40,6 +46,12 @@ kotlin {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation("io.ktor:ktor-client-cio:3.0.3")
+
+                // Global hotkeys on macOS/Windows/Linux. Requires Accessibility
+                // permission on macOS when running packaged apps.
+                implementation("com.github.kwhat:jnativehook:2.2.2")
+
+                // AWT SystemTray and Clipboard are built into the JDK.
             }
         }
 

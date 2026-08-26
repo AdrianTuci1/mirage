@@ -37,12 +37,14 @@ Container Docker care rulează pe un server cu acces la sursele de date. Respons
 
 ### 2.2 Kotlin Multiplatform Client
 
-Aplicație desktop (Compose Desktop) care rulează pe Windows, macOS și Linux. Responsabilități:
+Aplicație desktop (Compose Desktop) care rulează pe Windows, macOS și Linux ca launcher global. Responsabilități:
 
 - Parsează Vault URI și se conectează la Remote Indexer.
 - Descarcă delta-ul de index și îl aplică în LanceDB local.
+- Ascultă un global hotkey (ex: `Cmd/Ctrl + Shift + Space`) și afișează o fereastră flotantă de căutare.
 - Caută în indexul local folosind vectori de interogare.
 - Deschide fișierele direct din sursă prin adaptoare VFS.
+- Oferă system tray icon și clipboard history (opțional).
 - Validează licența Pro offline.
 
 ### 2.3 Virtual File System (VFS)
@@ -68,10 +70,18 @@ Sursă (read-only) -> Extract features -> ONNX inference -> LanceDB -> Delta fil
 Client -> GET /sync/delta?version=X -> Server stream .lance delta -> Local LanceDB
 ```
 
-### 3.3 Căutare și deschidere
+### 3.3 Căutare și deschidere (Spotlight-style)
 
 ```
-User query -> Embedding local/remote -> LanceDB ANN search -> Rezultate -> VFS open -> Aplicație nativă
+Global hotkey -> Floating Search Window -> User query -> Embedding -> LanceDB ANN search
+   -> Rezultate -> Enter/Click -> VFS open -> Aplicație nativă
+   -> Esc/Blur -> Hide window
+```
+
+### 3.4 Clipboard history (opțional)
+
+```
+System clipboard -> poller -> LanceDB vector index -> Searchable in floating window
 ```
 
 ## 4. Decizii cheie

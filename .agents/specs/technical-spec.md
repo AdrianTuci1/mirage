@@ -158,6 +158,45 @@ class NasSmbVfsAdapter(private val smbCredentials: SmbCredentials) : VfsAdapter 
 }
 ```
 
+### Module 4: Global Search UI & OS Integration (Spotlight/Raycast-style)
+
+Clientul nu este o aplicație desktop tradițională cu fereastră permanentă, ci un **launcher global** similar cu Spotlight pe macOS sau Raycast. Utilizatorul apelează o scurtătură globală, tastează un query, primește rezultate și acționează asupra lor (deschide, copiază, previzualizează).
+
+#### 3.4.1 Componente OS
+
+- **Global Shortcut Manager**: ascultă o combinație globală de taste (ex: `Cmd/Ctrl + Shift + Space`) folosind JNativeHook.
+- **Floating Search Window**: fereastră compactă, centrată pe ecran, fără decorațiuni, afișată/ascunsă la activarea scurtăturii.
+- **System Tray**: iconiță în bara de meniu/sistem cu opțiuni Show / Settings / Quit.
+- **Clipboard Manager**: istoric al clipboard-ului local, indexabil și căutabil (opțional activabil).
+
+#### 3.4.2 Stack UI
+
+- **Compose Multiplatform (Desktop)**: UI declarativ, un singur codebase pentru macOS, Windows, Linux.
+- **JNativeHook**: librărie nativă cross-platform pentru global hotkeys.
+- **AWT SystemTray + Clipboard**: API-uri built-in Java pentru tray icon și clipboard.
+
+#### 3.4.3 Exemplu de flow
+
+```kotlin
+// 1. Utilizatorul apasă Cmd/Ctrl + Shift + Space
+GlobalShortcutManager.register("Cmd+Shift+Space") {
+    FloatingSearchWindow.show()
+}
+
+// 2. Tastează query; clientul caută în LanceDB local
+val results = searchEngine.query(query)
+
+// 3. Selectează un rezultat și apasă Enter -> deschide fișierul
+VfsManager.open(result.relativePath, result.sourceType)
+
+// 4. Esc sau click în afara ferestrei -> ascunde fereastra
+FloatingSearchWindow.hide()
+```
+
+#### 3.4.4 Atenție la dependențe Compose
+
+Imports-urile sunt `androidx.compose.*`, dar artifactele rezolvate sunt `org.jetbrains.compose.*` (multiplatform desktop). Nu folosim Jetpack Compose Android-only.
+
 ## 4. Cerințe nefuncționale
 
 - **Local-first**: indexarea locală este gratuită și fără limite de dimensiune.
@@ -165,6 +204,7 @@ class NasSmbVfsAdapter(private val smbCredentials: SmbCredentials) : VfsAdapter 
 - **Performanță**: inferență ONNX int8, suport AVX2/NEON/CUDA.
 - **Securitate**: conectorii read-only; token-urile private rămân pe client.
 - **Portabilitate**: Kotlin Multiplatform pentru desktop (Windows, macOS, Linux).
+- **Discreție OS**: aplicația rulează în background, tray icon, global hotkey, fereastră flotantă.
 
 ## 5. API-uri și contracte
 
@@ -202,3 +242,6 @@ Response: stream de fișiere `.lance` noi.
 - [ ] Clientul KMP poate parse Vault URI și poate sincroniza local LanceDB.
 - [ ] VFS poate deschide direct fișiere din local, Dropbox, Google Drive și NAS/SMB.
 - [ ] Licența offline este validată prin cheie ED25519.
+- [ ] Global hotkey deschide fereastra flotantă de căutare pe macOS/Windows/Linux.
+- [ ] System tray icon permite Show/Settings/Quit.
+- [ ] Clipboard history este indexabil și căutabil (opțional).

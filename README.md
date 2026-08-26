@@ -51,6 +51,7 @@ cd src/remote-indexer
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pytest -v
 uvicorn app.main:app --host 127.0.0.1 --port 8080
 ```
 
@@ -69,7 +70,10 @@ export JAVA_HOME=/tmp/jdk-21.0.5+11/Contents/Home
 # Opțiunea B: instalează Temurin 21
 cd src/client-kmp
 ./gradlew build
+./gradlew jvmTest
 ```
+
+**Notă despre dependențe:** fișierele Kotlin importă din pachetul `androidx.compose.*`, dar artifactele Gradle rezolvate sunt `org.jetbrains.compose.*` (Compose Multiplatform desktop pentru Windows, macOS, Linux). Nu folosim dependențe Android-only.
 
 ## Documentație
 
