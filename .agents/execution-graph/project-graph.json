@@ -117,22 +117,22 @@
       "id": "T3.1",
       "title": "Create KMP project skeleton (Compose Desktop)",
       "module": "client-kmp",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M0",
       "depends_on": ["T0.1"],
-      "outputs": ["src/client-kmp/build.gradle.kts", "src/client-kmp/gradle.properties"],
-      "notes": "Target JVM desktop first."
+      "outputs": ["src/client-kmp/build.gradle.kts", "src/client-kmp/gradle.properties", "src/client-kmp/settings.gradle.kts", "src/client-kmp/src/jvmMain/kotlin/Main.kt"],
+      "notes": "Target JVM desktop first. Gradle wrapper generated; build passes with JDK 21."
     },
     {
       "id": "T3.2",
       "title": "Implement Vault URI parser",
       "module": "client-kmp",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M3",
       "depends_on": ["T3.1"],
-      "outputs": ["src/client-kmp/src/commonMain/kotlin/VaultUriParser.kt"],
+      "outputs": ["src/client-kmp/src/commonMain/kotlin/VaultUriParser.kt", "src/client-kmp/src/commonMain/kotlin/RemoteVaultConfig.kt"],
       "notes": "Parse vault://host:port#vault_id=...&key=..."
     },
     {
@@ -161,7 +161,7 @@
       "id": "T4.1",
       "title": "Define VfsAdapter interface",
       "module": "client-kmp",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M4",
       "depends_on": ["T3.1"],
