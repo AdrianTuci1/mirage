@@ -3,8 +3,8 @@
 ## Stare curentă
 
 - **Data ultimei actualizări:** 2026-08-27
-- **Faza curentă:** M9 — Rust Core Daemon + IPC
-- **Progres general:** ~70% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1–T5.5, T8.1–T8.4, T9.1–T9.4 finalizate; T4.3–T4.5, T9.5–T9.6, T10.1–T10.3, T11.1–T11.2, T12.1–T12.2 rămân pending)
+- **Faza curentă:** M9 — Rust Core Daemon + IPC (complet) / M13 — Modular Download Manager & Optional Engines
+- **Progres general:** ~75% (T1.1–T1.6, T2.1–T2.2, T3.1–T3.4, T4.1–T4.2, T5.1–T5.5, T8.1–T8.4, T9.1–T9.6 finalizate; T4.3–T4.5, T10.1–T10.3, T11.1–T11.2, T12.1–T12.2, T13.1–T13.8 rămân pending)
 
 ## Task-uri finalizate
 
@@ -37,6 +37,8 @@
 | T9.2 | Implement IPC server (Unix socket + named pipe) | 2026-08-27 |
 | T9.3 | Integrate LanceDB Rust + vector search | 2026-08-27 |
 | T9.4 | Implement search RPC method | 2026-08-27 |
+| T9.5 | Integrate ONNX Runtime Rust for local embeddings | 2026-08-27 |
+| T9.6 | Implement DuckDB analytics engine | 2026-08-27 |
 
 ## Task-uri în progres
 
@@ -44,14 +46,20 @@ Niciunul.
 
 ## Task-uri următoare (prioritate)
 
-1. **T9.5** — Integrate ONNX Runtime Rust for local embeddings
-2. **T9.6** — Implement DuckDB analytics engine
-3. **T10.1** — Build Mirage CLI binary
-6. **T10.2** — Implement mirage search / query / status commands
-7. **T10.3** — Implement mirage mcp serve
-8. **T4.3** — Implement Dropbox VFS adapter
-9. **T4.4** — Implement Google Drive VFS adapter
-10. **T4.5** — Implement NAS/SMB VFS adapter
+1. **T10.1** — Build Mirage CLI binary
+2. **T10.2** — Implement mirage search / query / status commands
+3. **T10.3** — Implement mirage mcp serve
+4. **T13.1** — Design module manifest format and catalog
+5. **T13.2** — Implement Modular Download Manager in daemon
+6. **T13.3** — Refactor DuckDB analytics as downloadable module
+7. **T13.4** — Refactor ONNX Runtime embedder as downloadable module
+8. **T13.5** — Implement SLM SQL generator over ONNX
+9. **T13.6** — Add IPC methods for module management and SQL generation
+10. **T13.7** — Update KMP GUI to request and track module downloads
+11. **T13.8** — Implement CLI commands for module and SQL generation
+12. **T4.3** — Implement Dropbox VFS adapter
+13. **T4.4** — Implement Google Drive VFS adapter
+14. **T4.5** — Implement NAS/SMB VFS adapter
 
 ## Blockere
 
@@ -93,8 +101,16 @@ Niciunul.
 - UI actualizat cu buton "Sync" în bara de stare; la finalizare se reîmprospătează rezultatele.
 - Implementat T5.2: flow-ul Add Server cu URL + code sau Vault URI complet; `ServerConnection` abstractizează conexiunea, iar `RemoteVaultManager` folosește flag-ul HTTPS. SettingsWindow include acum secțiunea Servers cu serverele conectate.
 - Planul general a fost extins: arhitectură Core Daemon Rust + IPC pentru GUI/CLI/MCP, DuckDB analytics, modular setup wizard, Admin Web Console pentru worker self-hosted. Vezi ADR-urile 008, 009, 010, 011.
-- Constrângeri noi: DuckDB pre-impachetat în binar; datele locale și modelele ONNX se stochează în folderul aplicației (nu în `~/.mirage` sau `Documents`); la dezinstalare totul este șters; nu se depinde de llama.cpp / GGUF.
+- Constrângeri noi: datele locale, modelele ONNX și modulele descărcabile se stochează în folderul aplicației (nu în `~/.mirage` sau `Documents`); la dezinstalare totul este șters; nu se depinde de llama.cpp / GGUF; DuckDB și ONNX Runtime sunt module descărcabile la cerere, nu pre-impachetate.
 - Teste: `pytest -v` — 7 passed; `./gradlew jvmTest` — BUILD SUCCESSFUL.
 - Implementat T9.3–T9.4: `LanceDbStore` în `src/daemon/src/db.rs`, `search` și `index` RPC în `src/daemon/src/ipc/server.rs`, integrat în `main.rs`. Căutarea folosește LanceDB pentru stocare și similaritate cosinus în Rust (brute-force MVP fără index vectorial). Test de integrare `tests/search_rpc.rs` verifică răspuns gol inițial, indexare și căutare cu scor.
 - Build și teste: `cargo build` și `cargo test` trec în `src/daemon/` (5 unit tests + 2 integration tests). A fost necesară ridicarea timeout-ului în `tests/ipc_ping.rs` la 30s din cauza timpului de inițializare LanceDB la primul pornire.
+- Implementat T9.5–T9.6: `OnnxEmbedder` + fallback deterministic în `src/daemon_next/src/embeddings.rs`, `Analytics` bazat pe DuckDB în `src/daemon_next/src/analytics.rs`. Noi metode IPC: `embed`, `query`, `search` cu text. Teste adăugate pentru embeddings, query SQL și search-by-text. Toate testele trec în `src/daemon_next/` (11 unit + 4 integration).
+- Refactorizare planificată pentru modular download: ADR 012 acceptat. DuckDB și ONNX Runtime vor fi descărcate la cerere, nu bunduite în binar. Binarul de bază rămâne mic (~20–50 MB); modulele opționale ajung în `<app-bundle>/downloads/` și `<app-bundle>/models/`. La dezinstalare totul se șterge.
+- Dimensiunea binarului actual (debug/release): 716 MB / 284 MB. După strip și LTO scade la ~200 MB, dar obiectivul final este un installer < 50 MB cu module descărcabile.
+- Implementare viitoare: SLM mic pentru generare SQL peste ONNX Runtime, fără llama.cpp.
 - Notă: `lancedb = "0.37"` depinde intern de `arrow` 58, așa că am folosit `arrow-array/arrow-schema/arrow-cast/arrow-buffer = "58"` în loc de "53" pentru a evita conflictele de versiune. Compilatorul `protoc` a fost descărcat manual în `/tmp/protoc` deoarece LanceDB are nevoie de el la build.
+- Design T13.1/T13.2 finalizat: `.agents/specs/modular-download-manager.md` definește manifestul, catalogul, mașina de stări, IPC, securitate și încărcarea dinamică; `.agents/specs/module-manifest-schema.json` este schema JSON pentru validare; graful de execuție a fost actualizat cu linkuri către design.
+- Design finalizat pentru T10.1–T10.3 și T13.8: `.agents/specs/cli-mcp-design.md`. Include structura crate-ului CLI, comenzi, descoperire socket, abstractizare IPC, output formatting, server MCP stdio (tools/resources/prompts) și integrarea cu Modular Download Manager.
+- Design finalizat pentru refactorizarea motoarelor opționale T13.3 (DuckDB) și T13.4 (ONNX Runtime): `.agents/specs/optional-engine-refactor.md`. Definește feature flags în Cargo.toml, încărcarea dinamică prin `libloading`, schimbările în `DaemonConfig`, secvența de startup, erorile structurate pentru module lipsă, refactorizarea `IpcServer::new()`, embedder fallback, testarea cu stub-uri și diferențele pe platforme (dylib/dll/so).
+- Design T13.5 finalizat: `.agents/specs/slm-sql-generator.md` definește modelul multilingv `bigscience/mt0-small` INT8 (~120–160 MB), pachetul `slm_nl_router`, prompt template cu routing intenție (`semantic_search` vs `sql_query`), generare SQL, sumarizare rezultate în limbaj natural, tokenizare, fluxul de inferență ONNX autoregresiv, post-procesare, securitate (blocare DDL/DML distructiv), metoda IPC `ask(question)` și integrarea cu CLI/MCP. Modelul nu este inclus în binar; se descarcă la cerere.

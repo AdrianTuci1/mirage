@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mirage.ai/schemas/module-manifest.json",
+  "title": "Mirage Module Manifest",
+  "description": "Schema for a single Mirage downloadable module manifest entry.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "description",
+    "kind",
+    "license",
+    "is_optional",
+    "dependencies",
+    "platforms"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique module identifier. Lowercase letters, digits and underscores only.",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable module name.",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the module.",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[a-zA-Z0-9-]+)?(?:\\+[a-zA-Z0-9-]+)?$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Short description shown in the wizard and settings UI.",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "kind": {
+      "type": "string",
+      "description": "Module category.",
+      "enum": ["runtime", "library", "model"]
+    },
+    "license": {
+      "type": "string",
+      "description": "SPDX identifier or URL to the license text.",
+      "minLength": 1
+    },
+    "is_optional": {
+      "type": "boolean",
+      "description": "True if the module is not shipped in the base installer."
+    },
+    "dependencies": {
+      "type": "array",
+      "description": "Module IDs that must be ready before this module can be activated.",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "uniqueItems": true
+    },
+    "platforms": {
+      "type": "object",
+      "description": "Per-platform or universal download metadata.",
+      "minProperties": 1,
+      "patternProperties": {
+        "^(macos_aarch64|macos_x86_64|windows_x86_64|linux_x86_64|linux_aarch64|universal)$": {
+          "$ref": "#/definitions/platformEntry"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "platformEntry": {
+      "type": "object",
+      "required": [
+        "url",
+        "size",
+        "checksum",
+        "archive_format",
+        "files"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "HTTPS URL of the module archive.",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "size": {
+          "type": "integer",
+          "description": "Archive size in bytes.",
+          "minimum": 1
+        },
+        "checksum": {
+          "type": "string",
+          "description": "SHA-256 hex digest of the archive.",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "archive_format": {
+          "type": "string",
+          "description": "Archive format used for extraction.",
+          "enum": ["tar.gz", "zip", "raw"]
+        },
+        "files": {
+          "type": "array",
+          "description": "Expected files after extraction.",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/fileEntry"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "fileEntry": {
+      "type": "object",
+      "required": [
+        "relative_path",
+        "sha256",
+        "executable",
+        "required"
+      ],
+      "properties": {
+        "relative_path": {
+          "type": "string",
+          "description": "Relative path inside the extraction directory.",
+          "pattern": "^[^/].*",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "description": "SHA-256 hex digest of the extracted file.",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "executable": {
+          "type": "boolean",
+          "description": "Whether the file needs execute permission (true for shared libraries)."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether the file is mandatory for the module to work."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

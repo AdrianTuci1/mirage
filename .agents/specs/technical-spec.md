@@ -16,8 +16,8 @@ Mirage este un motor de căutare semantică **local-first** cu arhitectură de d
 │                           MIRAGE DAEMON (Rust Background)                       │
 │                                                                               │
 │  • Vector & Text Index  (LanceDB / Tantivy)                                   │
-│  • Tabular & SQL Engine (DuckDB / Parquet)                                    │
-│  • Embedded ML          (ONNX / Rust SIMD)                                    │
+│  • Tabular & SQL Engine (DuckDB / Parquet — descărcabil la cerere)             │
+│  • Embedded ML          (ONNX / Rust SIMD — descărcabil la cerere)            │
 │  • Sync Worker          (Local Stream / Remote Cloud Sync)                    │
 └───────────────────────────────▲───────────────────────────────────────────────┘
                                 │
@@ -39,11 +39,13 @@ Mirage este un motor de căutare semantică **local-first** cu arhitectură de d
 #### 3.1.1 Stack
 
 - **Limbaj**: Rust.
-- **Vector search**: LanceDB Rust + Rust SIMD.
-- **OLAP**: DuckDB embedded.
-- **ML**: ONNX Runtime Rust bindings.
+- **Vector search**: LanceDB Rust + Rust SIMD (prezent în binar).
+- **OLAP**: DuckDB descărcabil la cerere, activat din Setup Wizard sau la prima interogare tabulară.
+- **ML**: ONNX Runtime Rust bindings descărcabili la cerere; modelul de embeddings/vision/SLM vine în `models/`.
+- **SLM**: model ONNX mic pentru generare SQL din limbaj natural, pornit direct de daemon fără llama.cpp.
 - **IPC**: Unix Domain Sockets (Linux/macOS) + Named Pipes (Windows).
 - **Remote sync**: NDJSON streaming over HTTP/2 (MVP), gRPC opțional.
+- **Modular download manager**: descarcă binarele/modulele opționale doar când utilizatorul le activează.
 
 #### 3.1.2 Configurare
 
@@ -51,12 +53,14 @@ Mirage este un motor de căutare semantică **local-first** cu arhitectură de d
 # <app-bundle>/daemon.yaml
 data_dir: <app-bundle>/data
 models_dir: <app-bundle>/models
+downloads_dir: <app-bundle>/downloads
 socket_path: <app-bundle>/mirage.sock
 log_level: info
 modules:
-  vector: true
-  text: true
-  tabular: true
+  vector: true        # LanceDB + căutare vectorială, mereu activ
+  text: true          # embedder text, descarcă ONNX la primul index/search
+  tabular: false      # DuckDB, descărcat la primul query tabular
+  sql_generator: false # SLM mic ONNX pentru SQL natural-language
   audio: false
   vision: false
 sync:
@@ -64,7 +68,7 @@ sync:
   interval_sec: 60
 ```
 
-Toate căile sunt relative la folderul aplicației. La dezinstalare, întreg conținutul este șters.
+Toate căile sunt relative la folderul aplicației. La dezinstalare, întreg conținutul (date, modele, descărcări) este șters. Modulele opționale se descarcă doar la cerere, sub controlul utilizatorului.
 
 
 #### 3.1.3 IPC Protocol
@@ -95,9 +99,12 @@ Răspuns:
 #### 3.1.4 Metode IPC
 
 - `search(query, top_k, hybrid)` — vector + BM25 + SQL hibrid.
-- `query(sql)` — execută DuckDB SQL.
-- `index(path, source_type)` — indexare locală.
-- `status()` — starea daemonului.
+- `query(sql)` — execută DuckDB SQL; dacă DuckDB nu e descărcat, returnează eroare sau propune descărcarea.
+- `ask(question)` — folosește SLM multilingv ONNX pentru a decide intenția (`semantic_search` sau `sql_query`), a rula căutarea sau a genera/executa SQL și a returna un răspuns în limbaj natural.
+- `index(path, source_type)` — indexare locală; dacă embedderul ONNX lipsește, propune descărcarea.
+- `embed(text)` — produce vector text; fallback deterministic dacă modelul nu e disponibil.
+- `download_module(module_id)` — declanșează descărcarea unui modul opțional (`duckdb`, `onnx`, `slm_sql`).
+- `status()` — starea daemonului, module active, module disponibile/descărcate.
 - `sync(worker_url, code)` — declanșează sincronizare remote.
 - `open(path, source_type)` — deschide fișierul prin VFS.
 
@@ -137,26 +144,37 @@ Container Docker pentru procesare la distanță a volumelor mari.
 
 ### Module 6: Local ML Models
 
-Modele ONNX descărcate local în folderul aplicației (ex: `<app-bundle>/models/`):
+Modele și runtime-uri ONNX descărcate local în folderul aplicației (ex: `<app-bundle>/downloads/` și `<app-bundle>/models/`):
 
-- Text embeddings (all-MiniLM-L6-v2).
-- Vision embeddings (CLIP, opțional).
-- SLM pentru generare SQL (opțional).
-- Translator (opțional).
+- **ONNX Runtime**: biblioteca nativă necesară pentru inferență. Se descarcă o singură dată, la primul modul ONNX activat.
+- **Text embeddings** (ex: all-MiniLM-L6-v2): descărcat când utilizatorul activează indexarea/căutarea text.
+- **Vision embeddings** (CLIP): opțional, descărcat la cerere.
+- **SLM pentru generare SQL**: model ONNX mic (fără llama.cpp), pornit direct de daemon pentru a transforma întrebări în SQL.
+- **Translator**: opțional.
 
-Descărcarea este explicit aprobată de utilizator în wizard. Modelele se șterg odată cu aplicația.
+Descărcarea este explicit aprobată de utilizator în wizard sau în dialog contextual. Toate fișierele se șterg odată cu aplicația.
 
 ### Module 7: Modular Setup Wizard
 
-La prima configurare, utilizatorul selectează:
+La prima configurare, utilizatorul selectează ce funcționalități vrea activate. Doar nucleul (LanceDB + IPC) vine în binarul de bază; restul se descarcă la cerere:
 
-- [x] Vector & Text Indexing (LanceDB / Tantivy)
-- [x] Tabular & SQL Analytics Engine (DuckDB)
-- [ ] Audio / Voice Processing Engine
-- [ ] Multi-Modal & Vision Embeddings
-- [ ] SLM pentru SQL natural-language
+- [x] Vector & Text Search (LanceDB — inclus)
+- [ ] Tabular & SQL Analytics Engine (DuckDB — descărcabil)
+- [ ] Audio / Voice Processing Engine (descărcabil)
+- [ ] Multi-Modal & Vision Embeddings (ONNX — descărcabil)
+- [ ] SLM pentru SQL natural-language (ONNX — descărcabil, fără llama.cpp)
 
-Fiecare modul descarcă doar binarele necesare.
+Wizard-ul arată dimensiunea fiecărei descărcări, cere confirmare și gestionează progresul. Modulele pot fi activate ulterior din Settings.
+
+### Module 8: Modular Download Manager (Rust + GUI)
+
+Managerul centralizează descărcările opționale:
+
+- Catalog local cu module disponibile, dimensiuni și URL-uri semnate.
+- Descărcare prin HTTPS cu resume, verificare de checksum.
+- Stocare în `<app-bundle>/downloads/` și `<app-bundle>/models/`.
+- Notificare IPC când un modul a fost activat.
+- Ștergerea descărcărilor la dezinstalare.
 
 ## 4. Securitate
 

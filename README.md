@@ -16,8 +16,8 @@ Toate datele locale și modelele descărcate se păstrează în folderul aplica�
 │                           MIRAGE DAEMON (Rust Background)                       │
 │                                                                               │
 │  • Vector & Text Index  (LanceDB / Tantivy)                                   │
-│  • Tabular & SQL Engine (DuckDB / Parquet)                                    │
-│  • Embedded ML          (ONNX / Rust SIMD)                                    │
+│  • Tabular & SQL Engine (DuckDB / Parquet — descărcabil la cerere)            │
+│  • Embedded ML          (ONNX / Rust SIMD — descărcabil la cerere)           │
 │  • Sync Worker          (Local Stream / Remote Cloud Sync)                    │
 └───────────────────────────────▲───────────────────────────────────────────────┘
                                 │
