@@ -58,6 +58,12 @@ Toate specificațiile, deciziile și planul de execuție sunt în `.agents/`.
 - `.agents/architecture/system-overview.md`
 - `.agents/decisions/adr/`
 
+## UI / Design System
+
+Designul aplicației este definit în:
+
+- `docs/ui-design-system.md` — tokens de culoare/spațiere/tipografie, structura ferestrei de căutare, fereastra de settings, comportamente.
+
 ## Stare
 
-Proiect în dezvoltare activă. Faza curentă: M8 local AI + planificare M9 daemon Rust.
+Proiect în dezvoltare activă. Faza curentă: M13 modular download manager + IPC implementate; urmează SLM, refactor module și CLI/GUI.
