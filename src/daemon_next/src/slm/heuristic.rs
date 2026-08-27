@@ -1,42 +1,10 @@
 use crate::analytics::Analytics;
 use crate::db::LanceDbStore;
 use crate::embeddings::Embedder;
-use crate::ipc::protocol::JsonRpcError;
+use crate::slm::{AskResponse, SlmEngine};
 use anyhow::{anyhow, Context, Result};
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
-
-/// Response produced by the SLM for a natural-language question.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum AskResponse {
-    /// The SLM decided the question is best answered by semantic search.
-    #[serde(rename = "semantic_search")]
-    SemanticSearch {
-        question: String,
-        results: Vec<crate::models::SearchResult>,
-    },
-    /// The SLM decided the question requires a SQL query over metadata.
-    #[serde(rename = "sql_query")]
-    SqlQuery {
-        question: String,
-        natural_language_answer: String,
-    },
-}
-
-/// Trait for a natural-language router / SQL generator.
-#[async_trait::async_trait]
-pub trait SlmEngine: Send + Sync {
-    /// Answer a user's natural-language question.
-    async fn ask(
-        &self,
-        question: &str,
-        store: Arc<LanceDbStore>,
-        embedder: Arc<dyn Embedder>,
-        analytics: Arc<Analytics>,
-    ) -> Result<AskResponse>;
-}
 
 /// Deterministic SLM used when no ONNX model is downloaded.
 ///
@@ -141,14 +109,13 @@ fn heuristic_sql(question: &str, analytics: &Analytics) -> Result<(String, Strin
         .context("failed to list tables")?;
     let table_names: Vec<&str> = tables
         .iter()
-        .filter_map(|row| {
-            row.values()
-                .next()
-                .and_then(|v| v.as_str())
-        })
+        .filter_map(|row| row.values().next().and_then(|v| v.as_str()))
         .collect();
 
-    let chosen = table_names.iter().find(|name| lower.contains(&name.to_lowercase())).copied();
+    let chosen = table_names
+        .iter()
+        .find(|name| lower.contains(&name.to_lowercase()))
+        .copied();
 
     let sql = if let Some(table) = chosen {
         if lower.contains("how many") || lower.contains("count") || lower.contains("rows") {
@@ -159,7 +126,8 @@ fn heuristic_sql(question: &str, analytics: &Analytics) -> Result<(String, Strin
     } else {
         return Ok((
             String::new(),
-            String::from("I couldn't match your question to a known table. Available tables: ") + &table_names.join(", "),
+            String::from("I couldn't match your question to a known table. Available tables: ")
+                + &table_names.join(", "),
         ));
     };
 
@@ -175,42 +143,6 @@ fn heuristic_sql(question: &str, analytics: &Analytics) -> Result<(String, Strin
 
 fn escape_identifier(ident: &str) -> String {
     format!("\"{}\"", ident.replace('"', "\"\""))
-}
-
-/// ONNX-backed SLM placeholder.
-///
-/// Loads mt0-small ONNX model and tokenizer from the module directory when available.
-/// Full encoder/decoder inference is stubbed; it currently returns an error so the
-/// caller can fall back to `HeuristicSlmEngine`.
-pub struct OnnxSlmEngine;
-
-impl OnnxSlmEngine {
-    pub fn new(_models_dir: impl AsRef<std::path::Path>) -> Result<Self> {
-        Err(anyhow!("ONNX SLM not yet implemented; use HeuristicSlmEngine"))
-    }
-}
-
-#[async_trait::async_trait]
-impl SlmEngine for OnnxSlmEngine {
-    async fn ask(
-        &self,
-        _question: &str,
-        _store: Arc<LanceDbStore>,
-        _embedder: Arc<dyn Embedder>,
-        _analytics: Arc<Analytics>,
-    ) -> Result<AskResponse> {
-        Err(anyhow!("ONNX SLM inference not yet implemented"))
-    }
-}
-
-impl AskResponse {
-    /// Convert an SLM error into a JSON-RPC error response.
-    pub fn to_json_rpc_error(error: anyhow::Error) -> JsonRpcError {
-        JsonRpcError::new(
-            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-            format!("ask failed: {}", error),
-        )
-    }
 }
 
 #[cfg(test)]
