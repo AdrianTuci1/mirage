@@ -89,8 +89,9 @@ async fn main() -> Result<()> {
     let embedder = create_embedder(&config.models_dir).context("failed to initialize embedder")?;
     let analytics = Arc::new(Analytics::open(&config).context("failed to open DuckDB analytics")?);
     let module_manager = Arc::new(ModuleManager::new(&config, None).await);
+    let slm: Arc<dyn mirage_daemon::SlmEngine> = Arc::new(mirage_daemon::HeuristicSlmEngine::new(10));
 
-    let server = IpcServer::new(store, embedder, analytics, module_manager);
+    let server = IpcServer::new(store, embedder, analytics, module_manager, slm);
     let config_for_server = config.clone();
 
     let server_handle = tokio::spawn(async move {

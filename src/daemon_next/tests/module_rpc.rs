@@ -170,23 +170,24 @@ async fn module_status_returns_missing_for_unknown_module() {
 }
 
 #[tokio::test]
-async fn ask_returns_module_missing_without_slm() {
+async fn ask_uses_heuristic_slm_without_onnx_model() {
     let dir = tempfile::tempdir().unwrap();
     let socket_path = dir.path().join("mirage.sock");
     let mut child = spawn_daemon(&dir).await;
 
+    // Semantic-style question should route to semantic_search even without SLM module.
     let result = mirage_daemon::ipc::client::IpcClient::call(
         &socket_path,
         "ask",
-        Some(serde_json::json!({ "question": "how many photos do I have?" })),
+        Some(serde_json::json!({ "question": "show me beach photos" })),
     )
     .await
     .expect("failed to call ask");
 
-    assert!(result.error.is_some(), "expected ask to fail without SLM");
-    let error = result.error.unwrap();
-    assert_eq!(error.code, -32001);
-    assert!(error.data.is_some());
+    assert_eq!(result.error, None, "ask should not fail: {:?}", result.error);
+    let response = result.result.expect("missing ask result");
+    assert_eq!(response["type"], "semantic_search");
+    assert!(response["results"].is_array());
 
     let _ = child.kill().await;
     let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;

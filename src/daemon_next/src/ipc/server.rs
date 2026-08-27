@@ -5,6 +5,7 @@ use crate::embeddings::Embedder;
 use crate::ipc::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 use crate::models::{Record, SearchResult};
 use crate::modules::ModuleManager;
+use crate::slm::{AskResponse, SlmEngine};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -18,19 +19,6 @@ use tracing::{debug, info, warn};
 type MethodHandler = Arc<
     dyn Fn(Value) -> Pin<Box<dyn Future<Output = Result<Value, JsonRpcError>> + Send>> + Send + Sync,
 >;
-
-async fn module_missing_error(manager: Arc<ModuleManager>, module_id: &str) -> JsonRpcError {
-    let status = manager.module_status(module_id).await;
-    JsonRpcError::new(
-        crate::ipc::protocol::ERROR_MODULE_MISSING,
-        format!("module {} is not installed", module_id),
-    )
-    .with_data(json!({
-        "error_kind": "module_missing",
-        "module_id": module_id,
-        "module_status": status,
-    }))
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(default)]
@@ -94,6 +82,7 @@ impl IpcServer {
         embedder: Arc<dyn Embedder>,
         analytics: Arc<Analytics>,
         module_manager: Arc<ModuleManager>,
+        slm: Arc<dyn SlmEngine>,
     ) -> Self {
         let mut server = Self {
             handlers: HashMap::new(),
@@ -443,9 +432,14 @@ impl IpcServer {
             })
         });
 
-        let ask_manager = Arc::clone(&module_manager);
+        let ask_store = Arc::clone(&store);
+        let ask_embedder = Arc::clone(&embedder);
+        let ask_analytics = Arc::clone(&analytics);
         server.register("ask", move |params: Value| {
-            let manager = Arc::clone(&ask_manager);
+            let store = Arc::clone(&ask_store);
+            let embedder = Arc::clone(&ask_embedder);
+            let analytics = Arc::clone(&ask_analytics);
+            let slm = Arc::clone(&slm);
             Box::pin(async move {
                 let request: AskRequest = serde_json::from_value(params).map_err(|e| {
                     JsonRpcError::new(
@@ -454,19 +448,17 @@ impl IpcServer {
                     )
                 })?;
 
-                let _ = request.question;
-                let required = ["slm_nl_router", "onnx_runtime", "duckdb"];
-                for module_id in &required {
-                    if !manager.is_ready(module_id).await {
-                        return Err(module_missing_error(manager, module_id).await);
-                    }
-                }
+                let response = slm
+                    .ask(&request.question, store, embedder, analytics)
+                    .await
+                    .map_err(AskResponse::to_json_rpc_error)?;
 
-                // TODO(T13.5): wire SLM NL router to choose between semantic_search and sql_query.
-                Err(JsonRpcError::new(
-                    crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                    "SLM routing is not yet implemented",
-                ))
+                serde_json::to_value(response).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("failed to serialize ask response: {}", e),
+                    )
+                })
             })
         });
 
