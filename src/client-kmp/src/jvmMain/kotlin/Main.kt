@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
@@ -44,6 +45,10 @@ fun main() = application {
 
     val connectedServers = remember { mutableStateListOf<ServerConnection>() }
     val remoteManagers = remember { mutableStateListOf<RemoteVaultManager>() }
+    val scope = rememberCoroutineScope()
+
+    var indexedCount by remember { mutableStateOf(0) }
+    var indexingProgress by remember { mutableStateOf<Float?>(null) }
 
     // Connect to the local Mirage daemon. The daemon must already be running;
     // lifecycle management (spawn/kill) will be added later.
@@ -125,11 +130,21 @@ fun main() = application {
                             }
                         },
                         modules = emptyList(),
-                        indexedCount = 0,
-                        indexingProgress = null,
+                        indexedCount = indexedCount,
+                        indexingProgress = indexingProgress,
                         onStartIndexing = {
-                            // TODO: show progress while indexing runs in the background.
-                            // launch { daemonClient.indexFiles(); daemonClient.indexApps() }
+                            scope.launch {
+                                try {
+                                    indexingProgress = 0.1f
+                                    indexedCount = daemonClient.indexFiles()
+                                    indexingProgress = 0.8f
+                                    daemonClient.indexApps()
+                                    indexingProgress = null
+                                } catch (e: Exception) {
+                                    indexingProgress = null
+                                    // TODO: surface indexing errors in the UI.
+                                }
+                            }
                         },
                         onOpenSettings = { isSettingsVisible = true },
                         onAddServer = { isAddServerVisible = true },
