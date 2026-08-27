@@ -11,12 +11,26 @@ pub struct Record {
     pub version: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchResultCategory {
+    App,
+    File,
+    Semantic,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SearchResult {
     pub id: String,
     pub relative_path: String,
     pub score: f64,
     pub source_type: String,
+    #[serde(default = "default_search_category")]
+    pub category: SearchResultCategory,
+}
+
+fn default_search_category() -> SearchResultCategory {
+    SearchResultCategory::Semantic
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

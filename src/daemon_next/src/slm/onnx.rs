@@ -395,6 +395,7 @@ async fn run_semantic_search(
             relative_path: r.record.relative_path,
             score: r.score,
             source_type: r.record.source_type,
+            category: crate::models::SearchResultCategory::Semantic,
         })
         .collect();
 

@@ -3,8 +3,9 @@ use crate::config::DaemonConfig;
 use crate::db::LanceDbStore;
 use crate::embeddings::Embedder;
 use crate::ipc::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
-use crate::models::{Record, SearchResult};
+use crate::models::{Record, SearchResult, SearchResultCategory};
 use crate::modules::ModuleManager;
+use crate::search::UnifiedSearch;
 use crate::slm::{AskResponse, SlmEngine};
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -83,6 +84,7 @@ impl IpcServer {
         analytics: Arc<Analytics>,
         module_manager: Arc<ModuleManager>,
         slm: Arc<dyn SlmEngine>,
+        search: Arc<UnifiedSearch>,
     ) -> Self {
         let mut server = Self {
             handlers: HashMap::new(),
@@ -112,11 +114,11 @@ impl IpcServer {
             })
         });
 
+        let search_searcher = Arc::clone(&search);
         let search_store = Arc::clone(&store);
-        let search_embedder = Arc::clone(&embedder);
         server.register("search", move |params: Value| {
+            let search = Arc::clone(&search_searcher);
             let store = Arc::clone(&search_store);
-            let embedder = Arc::clone(&search_embedder);
             Box::pin(async move {
                 let request: SearchRequest = serde_json::from_value(params).map_err(|e| {
                     JsonRpcError::new(
@@ -125,25 +127,37 @@ impl IpcServer {
                     )
                 })?;
 
-                let query_vector = match (request.query, request.query_vector) {
+                let results = match (request.query, request.query_vector) {
                     (Some(query), _) => {
-                        let vector = tokio::task::spawn_blocking(move || embedder.embed_text(&query))
+                        search
+                            .search(&query, request.top_k)
                             .await
                             .map_err(|e| {
                                 JsonRpcError::new(
                                     crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                                    format!("embedding task failed: {}", e),
+                                    format!("search failed: {}", e),
                                 )
                             })?
-                            .map_err(|e| {
-                                JsonRpcError::new(
-                                    crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                                    format!("embedding failed: {}", e),
-                                )
-                            })?;
-                        vector
                     }
-                    (None, Some(vector)) => vector,
+                    (None, Some(vector)) => {
+                        // Direct vector search: semantic-only, reserved for programmatic callers.
+                        let records = store.search(vector, request.top_k).await.map_err(|e| {
+                            JsonRpcError::new(
+                                crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                                format!("search failed: {}", e),
+                            )
+                        })?;
+                        records
+                            .into_iter()
+                            .map(|r| SearchResult {
+                                id: r.record.id,
+                                relative_path: r.record.relative_path,
+                                source_type: r.record.source_type,
+                                score: r.score,
+                                category: SearchResultCategory::Semantic,
+                            })
+                            .collect()
+                    }
                     (None, None) => {
                         return Err(JsonRpcError::new(
                             crate::ipc::protocol::ERROR_INVALID_PARAMS,
@@ -152,27 +166,7 @@ impl IpcServer {
                     }
                 };
 
-                let _hybrid = request.hybrid; // reserved for future BM25 hybridization.
-
-                let results = store
-                    .search(query_vector, request.top_k)
-                    .await
-                    .map_err(|e| {
-                        JsonRpcError::new(
-                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                            format!("search failed: {}", e),
-                        )
-                    })?;
-                let response: Vec<SearchResult> = results
-                    .into_iter()
-                    .map(|r| SearchResult {
-                        id: r.record.id,
-                        relative_path: r.record.relative_path,
-                        source_type: r.record.source_type,
-                        score: r.score,
-                    })
-                    .collect();
-                serde_json::to_value(response).map_err(|e| {
+                serde_json::to_value(results).map_err(|e| {
                     JsonRpcError::new(
                         crate::ipc::protocol::ERROR_INTERNAL_ERROR,
                         format!("failed to serialize search results: {}", e),

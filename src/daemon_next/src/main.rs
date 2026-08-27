@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use mirage_daemon::{logging, Analytics, create_embedder, DaemonConfig, IpcServer, LanceDbStore, ModuleManager};
+use mirage_daemon::{logging, Analytics, create_embedder, DaemonConfig, IpcServer, LanceDbStore, ModuleManager, UnifiedSearch};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -90,8 +90,14 @@ async fn main() -> Result<()> {
     let analytics = Arc::new(Analytics::open(&config).context("failed to open DuckDB analytics")?);
     let module_manager = Arc::new(ModuleManager::new(&config, None).await);
     let slm: Arc<dyn mirage_daemon::SlmEngine> = Arc::new(mirage_daemon::HeuristicSlmEngine::new(10));
+    let unified_search = Arc::new(UnifiedSearch::new(
+        Arc::clone(&store),
+        Arc::clone(&embedder),
+        config.roots.clone(),
+        config.excluded_dirs.clone(),
+    ));
 
-    let server = IpcServer::new(store, embedder, analytics, module_manager, slm);
+    let server = IpcServer::new(store, embedder, analytics, module_manager, slm, unified_search);
     let config_for_server = config.clone();
 
     let server_handle = tokio::spawn(async move {

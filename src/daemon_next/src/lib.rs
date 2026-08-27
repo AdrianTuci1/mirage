@@ -3,10 +3,14 @@ pub mod config;
 pub mod db;
 pub mod embeddings;
 pub mod ipc;
+pub mod local_index;
 pub mod logging;
 pub mod models;
 pub mod modules;
+pub mod search;
 pub mod slm;
+
+pub use search::UnifiedSearch;
 
 pub use analytics::Analytics;
 pub use config::DaemonConfig;

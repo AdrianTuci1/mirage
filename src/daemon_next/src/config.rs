@@ -37,6 +37,10 @@ pub struct DaemonConfig {
     pub log_level: String,
     pub catalog_url: Option<String>,
     pub modules: ModulesConfig,
+    /// Local roots to index for file name / path search.
+    pub roots: Vec<PathBuf>,
+    /// Directory names to skip while scanning local roots.
+    pub excluded_dirs: Vec<String>,
 }
 
 impl DaemonConfig {
@@ -61,6 +65,10 @@ impl DaemonConfig {
 impl Default for DaemonConfig {
     fn default() -> Self {
         let base = Self::base_dir();
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| base.clone());
         Self {
             data_dir: base.join("data"),
             models_dir: base.join("models"),
@@ -72,6 +80,14 @@ impl Default for DaemonConfig {
             log_level: String::from("info"),
             catalog_url: None,
             modules: ModulesConfig::default(),
+            roots: vec![home],
+            excluded_dirs: vec![
+                "node_modules".to_string(),
+                ".git".to_string(),
+                "target".to_string(),
+                "build".to_string(),
+                ".cache".to_string(),
+            ],
         }
     }
 }
