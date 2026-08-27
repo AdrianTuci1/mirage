@@ -5,20 +5,18 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
 import kotlin.test.Test
-import mirage.search.InMemoryVectorStore
-import mirage.search.SearchEngine
-import mirage.vfs.adapters.LocalVfsAdapter
+import mirage.search.SearchResult
 
 @OptIn(ExperimentalTestApi::class)
 class SearchScreenUiTest {
 
     @Test
     fun `search screen shows search input and status bar`() = runComposeUiTest {
-        val vfsAdapter = LocalVfsAdapter(rootPath = System.getProperty("java.io.tmpdir"))
         setContent {
             SearchScreen(
-                searchEngine = SearchEngine(InMemoryVectorStore()),
-                vfsAdapter = vfsAdapter
+                search = { emptyList() },
+                onOpenResult = {},
+                indexedCount = 0
             )
         }
 

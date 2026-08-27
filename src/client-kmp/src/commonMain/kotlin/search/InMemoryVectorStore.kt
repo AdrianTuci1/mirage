@@ -37,8 +37,7 @@ class InMemoryVectorStore : LocalVectorStore {
                     id = record.id,
                     relativePath = record.relativePath,
                     sourceType = record.sourceType,
-                    score = cosineSimilarity(vector, queryNorm, record.vector),
-                    vector = record.vector
+                    score = cosineSimilarity(vector, queryNorm, record.vector)
                 )
             }
             .sortedByDescending { it.score }

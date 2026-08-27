@@ -78,7 +78,6 @@ class SearchEngine(
             id = id,
             relativePath = relativePath,
             sourceType = sourceType,
-            score = score,
-            vector = vector
+            score = score
         )
 }

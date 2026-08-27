@@ -1,7 +1,6 @@
 package mirage.desktop
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
@@ -28,13 +27,14 @@ import mirage.desktop.ui.ModuleStatus
 import mirage.desktop.ui.SearchScreen
 import mirage.desktop.ui.SettingsWindow
 import mirage.desktop.ui.theme.MirageTheme
-import mirage.ai.OnnxRuntimeEmbedder
+import mirage.daemon.DaemonClient
 import mirage.search.InMemoryVectorStore
 import mirage.search.SearchEngine
-import mirage.search.VectorRecord
+import mirage.search.SearchResultCategory
 import mirage.vault.RemoteVaultManager
 import mirage.vault.ServerConnection
-import mirage.vfs.adapters.LocalVfsAdapter
+import java.awt.Desktop
+import java.io.File
 
 fun main() = application {
     var isSearchVisible by remember { mutableStateOf(false) }
@@ -42,10 +42,15 @@ fun main() = application {
     var isAddServerVisible by remember { mutableStateOf(false) }
     val clipboardManager = remember { ClipboardManager() }
 
-    val searchEngine = remember { createSearchEngineWithSeedData() }
-    val vfsAdapter = remember { LocalVfsAdapter(rootPath = System.getProperty("user.home")) }
     val connectedServers = remember { mutableStateListOf<ServerConnection>() }
     val remoteManagers = remember { mutableStateListOf<RemoteVaultManager>() }
+
+    // Connect to the local Mirage daemon. The daemon must already be running;
+    // lifecycle management (spawn/kill) will be added later.
+    val daemonClient = remember {
+        val socketPath = System.getProperty("user.home") + "/.mirage/mirage.sock"
+        DaemonClient(socketPath)
+    }
 
     // Global hotkey toggles the floating search window (Ctrl/Cmd + Space).
     GlobalShortcutManager { isSearchVisible = !isSearchVisible }
@@ -91,11 +96,41 @@ fun main() = application {
                     shadowElevation = 8.dp
                 ) {
                     SearchScreen(
-                        searchEngine = searchEngine,
-                        vfsAdapter = vfsAdapter,
+                        search = { query -> daemonClient.search(query) },
+                        onOpenResult = { result ->
+                            when (result.category) {
+                                SearchResultCategory.APP -> {
+                                    result.relativePath.takeIf { it.isNotBlank() }?.let { path ->
+                                        if (Desktop.isDesktopSupported()) {
+                                            Desktop.getDesktop().open(File(path))
+                                        }
+                                    }
+                                }
+                                SearchResultCategory.FILE -> {
+                                    result.relativePath.takeIf { it.isNotBlank() }?.let { path ->
+                                        if (Desktop.isDesktopSupported()) {
+                                            Desktop.getDesktop().open(File(path))
+                                        }
+                                    }
+                                }
+                                SearchResultCategory.SEMANTIC -> {
+                                    // Semantic results currently open the file path; later this
+                                    // may preview media in-app.
+                                    result.relativePath.takeIf { it.isNotBlank() }?.let { path ->
+                                        if (Desktop.isDesktopSupported()) {
+                                            Desktop.getDesktop().open(File(path))
+                                        }
+                                    }
+                                }
+                            }
+                        },
                         modules = emptyList(),
+                        indexedCount = 0,
                         indexingProgress = null,
-                        onStartIndexing = { /* TODO: trigger local indexing */ },
+                        onStartIndexing = {
+                            // TODO: show progress while indexing runs in the background.
+                            // launch { daemonClient.indexFiles(); daemonClient.indexApps() }
+                        },
                         onOpenSettings = { isSettingsVisible = true },
                         onAddServer = { isAddServerVisible = true },
                         onSync = { remoteManagers.forEach { it.syncDeltaIndex() } }
@@ -116,7 +151,7 @@ fun main() = application {
 
     if (isAddServerVisible) {
         AddServerScreen(
-            searchEngine = searchEngine,
+            searchEngine = remember { SearchEngine(InMemoryVectorStore()) },
             onServerAdded = { connection, manager ->
                 connectedServers.add(connection)
                 remoteManagers.add(manager)
@@ -125,57 +160,4 @@ fun main() = application {
             onDismiss = { isAddServerVisible = false }
         )
     }
-}
-
-private fun createSearchEngineWithSeedData(): SearchEngine {
-    val embedder = OnnxRuntimeEmbedder()
-    val store = InMemoryVectorStore()
-    val engine = SearchEngine(store, embedder)
-
-    val now = System.currentTimeMillis()
-
-    // Pad seed vectors to the embedder's dimension so cosine similarity works.
-    fun vector384(vararg head: Float): List<Float> =
-        head.toList() + List(384 - head.size) { 0.0f }
-
-    val records = listOf(
-        VectorRecord(
-            id = "doc-1",
-            relativePath = "documents/contract.pdf",
-            sourceType = "local",
-            vector = vector384(0.1f, 0.2f, 0.3f, 0.4f),
-            updatedAt = now - 86_400_000
-        ),
-        VectorRecord(
-            id = "doc-2",
-            relativePath = "notes/todo.txt",
-            sourceType = "local",
-            vector = vector384(0.2f, 0.1f, 0.4f, 0.3f),
-            updatedAt = now - 3_600_000
-        ),
-        VectorRecord(
-            id = "clip-1",
-            relativePath = "clipboard/link-to-repo",
-            sourceType = "clipboard",
-            vector = vector384(0.05f, 0.15f, 0.25f, 0.35f),
-            updatedAt = now
-        ),
-        VectorRecord(
-            id = "nas-1",
-            relativePath = "media/vacation/photo1.jpg",
-            sourceType = "nas",
-            vector = vector384(0.9f, 0.8f, 0.1f, 0.0f),
-            updatedAt = now - 172_800_000
-        ),
-        VectorRecord(
-            id = "dropbox-1",
-            relativePath = "shared/budget.xlsx",
-            sourceType = "dropbox",
-            vector = vector384(0.3f, 0.3f, 0.3f, 0.3f),
-            updatedAt = now - 10_000_000
-        )
-    )
-
-    records.forEach { engine.index(it) }
-    return engine
 }

@@ -59,13 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.LocalWindow
 import kotlinx.coroutines.launch
 import mirage.FileType
-import mirage.fileName
-import mirage.fileType
 import mirage.desktop.ui.theme.MirageTheme
 import mirage.desktop.ui.theme.MirageTokens
-import mirage.search.SearchEngine
-import mirage.search.SearchResult
-import mirage.vfs.VfsAdapter
+import mirage.fileName
+import mirage.fileType
 import org.jetbrains.skia.Image
 
 /**
@@ -89,9 +86,10 @@ data class ModuleStatus(
 @OptIn(ExperimentalComposeUiApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    searchEngine: SearchEngine,
-    vfsAdapter: VfsAdapter,
+    search: suspend (String) -> List<mirage.search.SearchResult>,
+    onOpenResult: (mirage.search.SearchResult) -> Unit,
     modules: List<ModuleStatus> = emptyList(),
+    indexedCount: Int = 0,
     indexingProgress: Float? = null,
     onStartIndexing: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
@@ -99,13 +97,13 @@ fun SearchScreen(
     onSync: suspend () -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
-    var results by remember(query) { mutableStateOf(emptyList<SearchResult>()) }
+    var results by remember(query) { mutableStateOf(emptyList<mirage.search.SearchResult>()) }
     var selectedIndex by remember(results) { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(searchEngine, query) {
-        results = if (query.isBlank()) emptyList() else searchEngine.search(query)
+    LaunchedEffect(query) {
+        results = if (query.isBlank()) emptyList() else search(query)
         selectedIndex = 0
     }
 
@@ -116,7 +114,7 @@ fun SearchScreen(
     val handleOpenSelected: () -> Unit = {
         val selected = results.getOrNull(selectedIndex)
         if (selected != null) {
-            scope.launch { vfsAdapter.openFile(selected.relativePath) }
+            onOpenResult(selected)
         }
     }
 
@@ -196,8 +194,7 @@ fun SearchScreen(
                         results = results,
                         selectedIndex = selectedIndex,
                         onSelect = { selectedIndex = it },
-                        onOpen = handleOpenSelected,
-                        vfsAdapter = vfsAdapter
+                        onOpen = handleOpenSelected
                     )
                 }
 
@@ -380,11 +377,10 @@ private fun ModuleTag(module: ModuleStatus) {
 
 @Composable
 private fun ResultsList(
-    results: List<SearchResult>,
+    results: List<mirage.search.SearchResult>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
-    onOpen: () -> Unit,
-    vfsAdapter: VfsAdapter
+    onOpen: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
@@ -393,7 +389,6 @@ private fun ResultsList(
         itemsIndexed(results, key = { _, result -> result.id }) { index, result ->
             ResultRow(
                 result = result,
-                vfsAdapter = vfsAdapter,
                 isSelected = index == selectedIndex,
                 onSelect = { onSelect(index) },
                 onOpen = onOpen
@@ -404,8 +399,7 @@ private fun ResultsList(
 
 @Composable
 private fun ResultRow(
-    result: SearchResult,
-    vfsAdapter: VfsAdapter,
+    result: mirage.search.SearchResult,
     isSelected: Boolean,
     onSelect: () -> Unit,
     onOpen: () -> Unit
@@ -413,10 +407,10 @@ private fun ResultRow(
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
     var thumbnail by remember { mutableStateOf<ByteArray?>(null) }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(result) {
-        thumbnail = vfsAdapter.fetchThumbnail(result.relativePath)
+        // TODO: fetch OS icons for apps and thumbnails for media via platform APIs.
+        thumbnail = null
     }
 
     val background = when {
