@@ -50,6 +50,18 @@ class DaemonClient(
 
     class DaemonException(message: String) : Exception(message)
 
+    /**
+     * Quick health check. Returns true if the daemon is reachable.
+     */
+    fun ping(): Boolean {
+        return try {
+            val response = call("ping", null)
+            response.toString().contains("pong", ignoreCase = true)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     suspend fun search(query: String, topK: Int = 10): List<SearchResult> = withContext(Dispatchers.IO) {
         val params = json.encodeToJsonElement(DaemonModels.SearchRequest.serializer(), DaemonModels.SearchRequest(query, topK))
         val response = call("search", params)

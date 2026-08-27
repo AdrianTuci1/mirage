@@ -3,6 +3,7 @@ package mirage.desktop
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,11 +51,24 @@ fun main() = application {
     var indexedCount by remember { mutableStateOf(0) }
     var indexingProgress by remember { mutableStateOf<Float?>(null) }
 
-    // Connect to the local Mirage daemon. The daemon must already be running;
-    // lifecycle management (spawn/kill) will be added later.
-    val daemonClient = remember {
-        val socketPath = System.getProperty("user.home") + "/.mirage/mirage.sock"
-        DaemonClient(socketPath)
+    val socketPath = System.getProperty("user.home") + "/.mirage/mirage.sock"
+    val dataDir = System.getProperty("user.home") + "/.mirage/data"
+    val modelsDir = System.getProperty("user.home") + "/.mirage/models"
+    val downloadsDir = System.getProperty("user.home") + "/.mirage/downloads"
+
+    val lifecycleManager = remember {
+        DaemonLifecycleManager(
+            socketPath = socketPath,
+            dataDir = dataDir,
+            modelsDir = modelsDir,
+            downloadsDir = downloadsDir
+        )
+    }
+
+    var daemonClient by remember { mutableStateOf<DaemonClient?>(null) }
+
+    LaunchedEffect(Unit) {
+        daemonClient = lifecycleManager.ensureRunning()
     }
 
     // Global hotkey toggles the floating search window (Ctrl/Cmd + Space).
@@ -68,7 +82,12 @@ fun main() = application {
         tooltip = "Mirage",
         onShow = { isSearchVisible = true },
         onSettings = { isSettingsVisible = true },
-        onQuit = ::exitApplication
+        onQuit = {
+            scope.launch {
+                lifecycleManager.stop()
+                exitApplication()
+            }
+        }
     )
 
     if (isSearchVisible) {
@@ -101,7 +120,7 @@ fun main() = application {
                     shadowElevation = 8.dp
                 ) {
                     SearchScreen(
-                        search = { query -> daemonClient.search(query) },
+                        search = { query -> daemonClient?.search(query) ?: emptyList() },
                         onOpenResult = { result ->
                             when (result.category) {
                                 SearchResultCategory.APP -> {
@@ -136,9 +155,9 @@ fun main() = application {
                             scope.launch {
                                 try {
                                     indexingProgress = 0.1f
-                                    indexedCount = daemonClient.indexFiles()
+                                    indexedCount = daemonClient?.indexFiles() ?: 0
                                     indexingProgress = 0.8f
-                                    daemonClient.indexApps()
+                                    daemonClient?.indexApps()
                                     indexingProgress = null
                                 } catch (e: Exception) {
                                     indexingProgress = null
