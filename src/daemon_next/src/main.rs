@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use mirage_daemon::{logging, Analytics, create_embedder, DaemonConfig, IpcServer, LanceDbStore};
+use mirage_daemon::{logging, Analytics, create_embedder, DaemonConfig, IpcServer, LanceDbStore, ModuleManager};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -13,6 +13,12 @@ struct Args {
 
     #[arg(long)]
     models_dir: Option<PathBuf>,
+
+    #[arg(long)]
+    downloads_dir: Option<PathBuf>,
+
+    #[arg(long)]
+    catalog_url: Option<String>,
 
     #[cfg(unix)]
     #[arg(long)]
@@ -47,6 +53,12 @@ async fn main() -> Result<()> {
     if let Some(models_dir) = args.models_dir {
         config.models_dir = models_dir;
     }
+    if let Some(downloads_dir) = args.downloads_dir {
+        config.downloads_dir = downloads_dir;
+    }
+    if let Some(catalog_url) = args.catalog_url {
+        config.catalog_url = Some(catalog_url);
+    }
     #[cfg(unix)]
     if let Some(socket_path) = args.socket_path {
         config.socket_path = socket_path;
@@ -76,8 +88,9 @@ async fn main() -> Result<()> {
     let store = Arc::new(LanceDbStore::open(&config).await.context("failed to open LanceDB store")?);
     let embedder = create_embedder(&config.models_dir).context("failed to initialize embedder")?;
     let analytics = Arc::new(Analytics::open(&config).context("failed to open DuckDB analytics")?);
+    let module_manager = Arc::new(ModuleManager::new(&config, None).await);
 
-    let server = IpcServer::new(store, embedder, analytics);
+    let server = IpcServer::new(store, embedder, analytics, module_manager);
     let config_for_server = config.clone();
 
     let server_handle = tokio::spawn(async move {

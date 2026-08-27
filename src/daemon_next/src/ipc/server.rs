@@ -4,6 +4,7 @@ use crate::db::LanceDbStore;
 use crate::embeddings::Embedder;
 use crate::ipc::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 use crate::models::{Record, SearchResult};
+use crate::modules::ModuleManager;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -17,6 +18,19 @@ use tracing::{debug, info, warn};
 type MethodHandler = Arc<
     dyn Fn(Value) -> Pin<Box<dyn Future<Output = Result<Value, JsonRpcError>> + Send>> + Send + Sync,
 >;
+
+async fn module_missing_error(manager: Arc<ModuleManager>, module_id: &str) -> JsonRpcError {
+    let status = manager.module_status(module_id).await;
+    JsonRpcError::new(
+        crate::ipc::protocol::ERROR_MODULE_MISSING,
+        format!("module {} is not installed", module_id),
+    )
+    .with_data(json!({
+        "error_kind": "module_missing",
+        "module_id": module_id,
+        "module_status": status,
+    }))
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(default)]
@@ -53,6 +67,23 @@ struct EmbedRequest {
     text: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct AskRequest {
+    question: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DownloadModuleRequest {
+    module_id: String,
+    #[serde(default)]
+    force: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModuleIdRequest {
+    module_id: String,
+}
+
 pub struct IpcServer {
     handlers: HashMap<String, MethodHandler>,
 }
@@ -62,6 +93,7 @@ impl IpcServer {
         store: Arc<LanceDbStore>,
         embedder: Arc<dyn Embedder>,
         analytics: Arc<Analytics>,
+        module_manager: Arc<ModuleManager>,
     ) -> Self {
         let mut server = Self {
             handlers: HashMap::new(),
@@ -253,6 +285,188 @@ impl IpcServer {
                         format!("failed to serialize embedding: {}", e),
                     )
                 })
+            })
+        });
+
+        let modules_manager = Arc::clone(&module_manager);
+        server.register("download_module", move |params: Value| {
+            let manager = Arc::clone(&modules_manager);
+            Box::pin(async move {
+                let request: DownloadModuleRequest = serde_json::from_value(params).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                        format!("invalid download_module params: {}", e),
+                    )
+                })?;
+
+                manager
+                    .download_module(&request.module_id, request.force)
+                    .await
+                    .map_err(|e| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            format!("download_module failed: {}", e),
+                        )
+                    })?;
+
+                let status = manager
+                    .module_status(&request.module_id)
+                    .await
+                    .ok_or_else(|| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            "module status unavailable after download request",
+                        )
+                    })?;
+
+                serde_json::to_value(status).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("failed to serialize module status: {}", e),
+                    )
+                })
+            })
+        });
+
+        let modules_manager = Arc::clone(&module_manager);
+        server.register("module_status", move |params: Value| {
+            let manager = Arc::clone(&modules_manager);
+            Box::pin(async move {
+                let request: ModuleIdRequest = serde_json::from_value(params).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                        format!("invalid module_status params: {}", e),
+                    )
+                })?;
+
+                let status = manager.module_status(&request.module_id).await.ok_or_else(|| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("module {} not found", request.module_id),
+                    )
+                })?;
+
+                serde_json::to_value(status).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("failed to serialize module status: {}", e),
+                    )
+                })
+            })
+        });
+
+        let modules_manager = Arc::clone(&module_manager);
+        server.register("list_modules", move |_params: Value| {
+            let manager = Arc::clone(&modules_manager);
+            Box::pin(async move {
+                let modules = manager.list_modules().await;
+                serde_json::to_value(modules).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("failed to serialize module list: {}", e),
+                    )
+                })
+            })
+        });
+
+        let modules_manager = Arc::clone(&module_manager);
+        server.register("cancel_download", move |params: Value| {
+            let manager = Arc::clone(&modules_manager);
+            Box::pin(async move {
+                let request: ModuleIdRequest = serde_json::from_value(params).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                        format!("invalid cancel_download params: {}", e),
+                    )
+                })?;
+
+                manager
+                    .cancel_download(&request.module_id)
+                    .await
+                    .map_err(|e| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            format!("cancel_download failed: {}", e),
+                        )
+                    })?;
+
+                let status = manager.module_status(&request.module_id).await.ok_or_else(|| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        "module status unavailable after cancel",
+                    )
+                })?;
+
+                serde_json::to_value(status).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("failed to serialize module status: {}", e),
+                    )
+                })
+            })
+        });
+
+        let modules_manager = Arc::clone(&module_manager);
+        server.register("remove_module", move |params: Value| {
+            let manager = Arc::clone(&modules_manager);
+            Box::pin(async move {
+                let request: ModuleIdRequest = serde_json::from_value(params).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                        format!("invalid remove_module params: {}", e),
+                    )
+                })?;
+
+                manager
+                    .remove_module(&request.module_id)
+                    .await
+                    .map_err(|e| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            format!("remove_module failed: {}", e),
+                        )
+                    })?;
+
+                let status = manager.module_status(&request.module_id).await.ok_or_else(|| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        "module status unavailable after remove",
+                    )
+                })?;
+
+                serde_json::to_value(status).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("failed to serialize module status: {}", e),
+                    )
+                })
+            })
+        });
+
+        let ask_manager = Arc::clone(&module_manager);
+        server.register("ask", move |params: Value| {
+            let manager = Arc::clone(&ask_manager);
+            Box::pin(async move {
+                let request: AskRequest = serde_json::from_value(params).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                        format!("invalid ask params: {}", e),
+                    )
+                })?;
+
+                let _ = request.question;
+                let required = ["slm_nl_router", "onnx_runtime", "duckdb"];
+                for module_id in &required {
+                    if !manager.is_ready(module_id).await {
+                        return Err(module_missing_error(manager, module_id).await);
+                    }
+                }
+
+                // TODO(T13.5): wire SLM NL router to choose between semantic_search and sql_query.
+                Err(JsonRpcError::new(
+                    crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                    "SLM routing is not yet implemented",
+                ))
             })
         });
 

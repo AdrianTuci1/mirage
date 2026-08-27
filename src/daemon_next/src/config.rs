@@ -29,11 +29,13 @@ impl Default for ModulesConfig {
 pub struct DaemonConfig {
     pub data_dir: PathBuf,
     pub models_dir: PathBuf,
+    pub downloads_dir: PathBuf,
     #[cfg(unix)]
     pub socket_path: PathBuf,
     #[cfg(windows)]
     pub pipe_name: String,
     pub log_level: String,
+    pub catalog_url: Option<String>,
     pub modules: ModulesConfig,
 }
 
@@ -62,11 +64,13 @@ impl Default for DaemonConfig {
         Self {
             data_dir: base.join("data"),
             models_dir: base.join("models"),
+            downloads_dir: base.join("downloads"),
             #[cfg(unix)]
             socket_path: Self::default_socket_path(),
             #[cfg(windows)]
             pipe_name: Self::default_pipe_name(),
             log_level: String::from("info"),
+            catalog_url: None,
             modules: ModulesConfig::default(),
         }
     }
@@ -109,6 +113,8 @@ impl DaemonConfig {
             .with_context(|| format!("failed to create data directory {}", self.data_dir.display()))?;
         std::fs::create_dir_all(&self.models_dir)
             .with_context(|| format!("failed to create models directory {}", self.models_dir.display()))?;
+        std::fs::create_dir_all(&self.downloads_dir)
+            .with_context(|| format!("failed to create downloads directory {}", self.downloads_dir.display()))?;
         Ok(())
     }
 }
