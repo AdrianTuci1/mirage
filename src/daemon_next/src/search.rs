@@ -1,3 +1,4 @@
+use crate::apps::AppIndex;
 use crate::db::LanceDbStore;
 use crate::embeddings::Embedder;
 use crate::local_index::{LocalFileIndex, LocalSearchResult};
@@ -10,11 +11,12 @@ use std::sync::{Arc, Mutex};
 ///
 /// Ranking follows the Mirage design system: apps first, then local files, then
 /// semantic results. Embeddings are used only for meaning/content search; file
-/// names are matched with a lightweight string index.
+/// names and app names are matched with a lightweight string index.
 pub struct UnifiedSearch {
     store: Arc<LanceDbStore>,
     embedder: Arc<dyn Embedder>,
     file_index: Mutex<LocalFileIndex>,
+    app_index: Mutex<AppIndex>,
     roots: Vec<PathBuf>,
     excluded_dirs: Vec<String>,
 }
@@ -30,6 +32,7 @@ impl UnifiedSearch {
             store,
             embedder,
             file_index: Mutex::new(LocalFileIndex::new()),
+            app_index: Mutex::new(AppIndex::new()),
             roots,
             excluded_dirs,
         }
@@ -45,9 +48,31 @@ impl UnifiedSearch {
         Ok(index.count())
     }
 
+    /// Refresh the OS application index.
+    pub fn index_apps(&self) -> Result<usize> {
+        let mut index = self
+            .app_index
+            .lock()
+            .map_err(|e| anyhow::anyhow!("failed to lock app index: {}", e))?;
+        index.refresh();
+        Ok(index.count())
+    }
+
     /// Search across all local sources and rank by tier.
     pub async fn search(&self, query: &str, top_k: usize) -> Result<Vec<SearchResult>> {
         let mut results = Vec::new();
+
+        // Tier 1: OS apps.
+        {
+            let index = self
+                .app_index
+                .lock()
+                .map_err(|e| anyhow::anyhow!("failed to lock app index: {}", e))?;
+            let app_results = index.search(query, top_k);
+            for r in app_results {
+                results.push(app_to_search_result(r));
+            }
+        }
 
         // Tier 2: file name / path matches.
         {
@@ -89,8 +114,6 @@ impl UnifiedSearch {
             }
         }
 
-        // Tier 1 (apps) will be added here once OS app indexing is implemented.
-
         // Sort by tier, then by score descending.
         results.sort_by(|a, b| {
             let tier_a = category_rank(a.category);
@@ -112,6 +135,24 @@ impl UnifiedSearch {
             .lock()
             .map_err(|e| anyhow::anyhow!("failed to lock file index: {}", e))?;
         Ok(index.count())
+    }
+
+    pub fn app_index_count(&self) -> Result<usize> {
+        let index = self
+            .app_index
+            .lock()
+            .map_err(|e| anyhow::anyhow!("failed to lock app index: {}", e))?;
+        Ok(index.count())
+    }
+}
+
+fn app_to_search_result(r: crate::apps::AppSearchResult) -> SearchResult {
+    SearchResult {
+        id: format!("app://{}", r.app_id),
+        relative_path: r.name,
+        score: r.score,
+        source_type: r.source,
+        category: SearchResultCategory::App,
     }
 }
 
@@ -155,7 +196,6 @@ mod tests {
     #[tokio::test]
     async fn file_matches_rank_above_semantic_matches() {
         let tmp = TempDir::new().unwrap();
-        let _store_dir = tmp.path().join("lancedb");
         let cfg = crate::config::DaemonConfig {
             data_dir: tmp.path().to_path_buf(),
             ..Default::default()
@@ -205,4 +245,3 @@ mod tests {
         }
     }
 }
-

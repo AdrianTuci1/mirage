@@ -2,6 +2,7 @@ pub mod analytics;
 pub mod config;
 pub mod db;
 pub mod embeddings;
+pub mod apps;
 pub mod ipc;
 pub mod local_index;
 pub mod logging;
