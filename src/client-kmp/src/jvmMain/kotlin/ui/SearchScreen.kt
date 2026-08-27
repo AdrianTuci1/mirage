@@ -92,6 +92,8 @@ fun SearchScreen(
     searchEngine: SearchEngine,
     vfsAdapter: VfsAdapter,
     modules: List<ModuleStatus> = emptyList(),
+    indexingProgress: Float? = null,
+    onStartIndexing: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onAddServer: () -> Unit = {},
     onSync: suspend () -> Unit = {}
@@ -166,18 +168,18 @@ fun SearchScreen(
 
                 Spacer(modifier = Modifier.height(MirageTokens.spaceMd))
 
-                val showStatus = modules.isNotEmpty() || searchEngine.indexedCount > 0
-                if (showStatus) {
-                    StatusArea(
-                        modules = modules,
-                        indexedCount = searchEngine.indexedCount,
-                        onAddServer = onAddServer,
-                        onSync = {
-                            scope.launch {
-                                onSync()
-                                results = searchEngine.search(query)
-                            }
-                        }
+                IndexingStatus(
+                    progress = indexingProgress,
+                    indexedCount = searchEngine.indexedCount,
+                    onStartIndexing = onStartIndexing
+                )
+
+                Spacer(modifier = Modifier.height(MirageTokens.spaceMd))
+
+                val showModules = modules.isNotEmpty()
+                if (showModules) {
+                    ModuleStatusRow(
+                        modules = modules
                     )
                     Spacer(modifier = Modifier.height(MirageTokens.spaceMd))
                 }
@@ -290,59 +292,67 @@ private fun SearchInput(
 }
 
 @Composable
-private fun StatusArea(
-    modules: List<ModuleStatus>,
+private fun IndexingStatus(
+    progress: Float?,
     indexedCount: Int,
-    onAddServer: () -> Unit,
-    onSync: () -> Unit
+    onStartIndexing: () -> Unit
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm)
     ) {
-        if (modules.isNotEmpty()) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Modules:",
-                    fontSize = MirageTokens.textResultMeta,
-                    color = MirageTokens.colorTextSecondary
-                )
-                modules.forEach { module ->
-                    ModuleTag(module = module)
-                }
-            }
-        }
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "$indexedCount indexed",
+                text = if (progress != null) "Indexing..." else "$indexedCount indexed",
                 fontSize = MirageTokens.textResultMeta,
                 color = MirageTokens.colorTextSecondary
             )
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Sync",
-                    fontSize = MirageTokens.textResultMeta,
-                    color = MirageTokens.colorTextSecondary,
-                    modifier = Modifier.clickableNoRipple(onClick = onSync)
-                )
-                Text(
-                    text = "Add server",
-                    fontSize = MirageTokens.textResultMeta,
-                    color = MirageTokens.colorTextSecondary,
-                    modifier = Modifier.clickableNoRipple(onClick = onAddServer)
-                )
+            if (progress == null) {
+                Box(
+                    modifier = Modifier
+                        .background(color = MirageTokens.colorKeyBg, shape = RoundedCornerShape(MirageTokens.radiusSm))
+                        .clickableNoRipple(onClick = onStartIndexing)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Start indexing",
+                        fontSize = MirageTokens.textResultMeta,
+                        color = MirageTokens.colorTextPrimary
+                    )
+                }
             }
+        }
+
+        progress?.let {
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = { it.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth(),
+                color = MirageTokens.colorSelectedBgStrong,
+                trackColor = MirageTokens.colorKeyBg
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModuleStatusRow(
+    modules: List<ModuleStatus>
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Modules:",
+            fontSize = MirageTokens.textResultMeta,
+            color = MirageTokens.colorTextSecondary
+        )
+        modules.forEach { module ->
+            ModuleTag(module = module)
         }
     }
 }

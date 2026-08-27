@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -145,6 +146,8 @@ private fun SettingsHeader(
 
 @Composable
 private fun GeneralTab(onQuit: () -> Unit) {
+    var excludedDirs by remember { mutableStateOf("") }
+
     Column(
         verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd)
     ) {
@@ -160,6 +163,14 @@ private fun GeneralTab(onQuit: () -> Unit) {
             description = "Keep a searchable history of copied text.",
             checked = true,
             onCheckedChange = {}
+        )
+        HorizontalDivider(color = MirageTokens.colorBorder)
+        SettingInputRow(
+            title = "Excluded directories",
+            description = "Comma-separated paths relative to the vault root.",
+            value = excludedDirs,
+            placeholder = "e.g. node_modules, .git, build",
+            onValueChange = { excludedDirs = it }
         )
         HorizontalDivider(color = MirageTokens.colorBorder)
         SettingActionRow(
@@ -283,6 +294,42 @@ private fun SettingSwitchRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+@Composable
+private fun SettingInputRow(
+    title: String,
+    description: String,
+    value: String,
+    placeholder: String,
+    onValueChange: (String) -> Unit
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm)
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = MirageTokens.textSettingTitle,
+                fontWeight = FontWeight.Medium,
+                color = MirageTokens.colorTextPrimary
+            )
+            Text(
+                text = description,
+                fontSize = MirageTokens.textSettingDesc,
+                color = MirageTokens.colorTextSecondary
+            )
+        }
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
     }
 }

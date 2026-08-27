@@ -94,6 +94,8 @@ fun main() = application {
                         searchEngine = searchEngine,
                         vfsAdapter = vfsAdapter,
                         modules = emptyList(),
+                        indexingProgress = null,
+                        onStartIndexing = { /* TODO: trigger local indexing */ },
                         onOpenSettings = { isSettingsVisible = true },
                         onAddServer = { isAddServerVisible = true },
                         onSync = { remoteManagers.forEach { it.syncDeltaIndex() } }
