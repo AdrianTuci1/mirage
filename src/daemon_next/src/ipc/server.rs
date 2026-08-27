@@ -201,6 +201,34 @@ impl IpcServer {
             })
         });
 
+        let index_files_search = Arc::clone(&search);
+        server.register("index_files", move |_params: Value| {
+            let search = Arc::clone(&index_files_search);
+            Box::pin(async move {
+                let count = search.index_files().map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("index_files failed: {}", e),
+                    )
+                })?;
+                Ok(json!({ "count": count }))
+            })
+        });
+
+        let index_apps_search = Arc::clone(&search);
+        server.register("index_apps", move |_params: Value| {
+            let search = Arc::clone(&index_apps_search);
+            Box::pin(async move {
+                let count = search.index_apps().map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("index_apps failed: {}", e),
+                    )
+                })?;
+                Ok(json!({ "count": count }))
+            })
+        });
+
         let query_analytics = Arc::clone(&analytics);
         server.register("query", move |params: Value| {
             let analytics = Arc::clone(&query_analytics);
