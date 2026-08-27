@@ -22,9 +22,8 @@ class SearchScreenUiTest {
             )
         }
 
-        onNodeWithText("Search files, clipboard, vaults...").assertIsDisplayed()
+        onNodeWithText("Search everything").assertIsDisplayed()
         onNodeWithText("0 indexed").assertIsDisplayed()
-        onNodeWithText("Start indexing").assertIsDisplayed()
         onNodeWithText("Sync").assertIsDisplayed()
         onNodeWithText("Add server").assertIsDisplayed()
     }

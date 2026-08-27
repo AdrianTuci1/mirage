@@ -3,14 +3,12 @@ package mirage.desktop
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -26,8 +24,10 @@ import mirage.desktop.platform.GlobalShortcutManager
 import mirage.desktop.platform.SystemTrayManager
 import mirage.desktop.platform.centerOnActiveScreen
 import mirage.desktop.ui.AddServerScreen
+import mirage.desktop.ui.ModuleStatus
 import mirage.desktop.ui.SearchScreen
 import mirage.desktop.ui.SettingsWindow
+import mirage.desktop.ui.theme.MirageTheme
 import mirage.ai.OnnxRuntimeEmbedder
 import mirage.search.InMemoryVectorStore
 import mirage.search.SearchEngine
@@ -84,15 +84,16 @@ fun main() = application {
                 }
             }
         ) {
-            MaterialTheme {
+            MirageTheme {
                 Surface(
-                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    modifier = Modifier.fillMaxSize(),
                     shape = RoundedCornerShape(16.dp),
                     shadowElevation = 8.dp
                 ) {
                     SearchScreen(
                         searchEngine = searchEngine,
                         vfsAdapter = vfsAdapter,
+                        modules = emptyList(),
                         onOpenSettings = { isSettingsVisible = true },
                         onAddServer = { isAddServerVisible = true },
                         onSync = { remoteManagers.forEach { it.syncDeltaIndex() } }

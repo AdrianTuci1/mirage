@@ -2,8 +2,7 @@ package mirage.desktop.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -12,8 +11,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,25 +19,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,48 +41,74 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.LocalWindow
 import kotlinx.coroutines.launch
 import mirage.FileType
 import mirage.fileName
 import mirage.fileType
+import mirage.desktop.ui.theme.MirageTheme
+import mirage.desktop.ui.theme.MirageTokens
 import mirage.search.SearchEngine
 import mirage.search.SearchResult
 import mirage.vfs.VfsAdapter
 import org.jetbrains.skia.Image
 
 /**
- * Spotlight/Raycast-style floating search UI with a preview panel.
- *
- * The window is split into a left result list and a right preview panel.
- * Selecting or hovering a result loads its preview; pressing Enter opens
- * the selected result through the provided [vfsAdapter].
+ * Status of a downloadable module shown in the search UI.
  */
+data class ModuleStatus(
+    val id: String,
+    val label: String,
+    val ready: Boolean,
+    val progress: Float? = null
+)
+
+/**
+ * Spotlight-style floating search UI.
+ *
+ * - Single-column layout: input, optional module/indexing status, results, footer.
+ * - Results appear only after the user has typed at least one character.
+ * - First result is selected by default; navigate with ↑/↓ and open with ↵.
+ * - The window can be dragged by holding the background area.
+ */
+@OptIn(ExperimentalComposeUiApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     searchEngine: SearchEngine,
     vfsAdapter: VfsAdapter,
+    modules: List<ModuleStatus> = emptyList(),
     onOpenSettings: () -> Unit = {},
     onAddServer: () -> Unit = {},
     onSync: suspend () -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf(emptyList<SearchResult>()) }
+    var results by remember(query) { mutableStateOf(emptyList<SearchResult>()) }
     var selectedIndex by remember(results) { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
+    val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(searchEngine, query) {
-        results = searchEngine.search(query)
+        results = if (query.isBlank()) emptyList() else searchEngine.search(query)
+        selectedIndex = 0
+    }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
     }
 
     val handleOpenSelected: () -> Unit = {
@@ -102,119 +118,276 @@ fun SearchScreen(
         }
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .onPreviewKeyEvent { event ->
-                when {
-                    event.key == Key.DirectionDown && event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown -> {
-                        if (results.isNotEmpty()) {
-                            selectedIndex = (selectedIndex + 1).coerceAtMost(results.lastIndex)
+    MirageTheme {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Background layer that lets the user drag the undecorated window.
+            WindowDragArea(modifier = Modifier.fillMaxSize())
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(MirageTokens.spaceLg)
+                    .onPreviewKeyEvent { event ->
+                        when {
+                            event.key == Key.DirectionDown && event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown -> {
+                                if (results.isNotEmpty()) {
+                                    selectedIndex = (selectedIndex + 1).coerceAtMost(results.lastIndex)
+                                }
+                                true
+                            }
+
+                            event.key == Key.DirectionUp && event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown -> {
+                                if (results.isNotEmpty()) {
+                                    selectedIndex = (selectedIndex - 1).coerceAtLeast(0)
+                                }
+                                true
+                            }
+
+                            event.key == Key.Enter && event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown -> {
+                                handleOpenSelected()
+                                true
+                            }
+
+                            event.key == Key.Escape && event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown -> {
+                                // Escape is wired in the window-level onPreviewKeyEvent, but consuming it
+                                // here prevents focused text fields from swallowing it.
+                                false
+                            }
+
+                            else -> false
                         }
-                        true
                     }
-                    event.key == Key.DirectionUp && event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown -> {
-                        if (results.isNotEmpty()) {
-                            selectedIndex = (selectedIndex - 1).coerceAtLeast(0)
+            ) {
+                SearchInput(
+                    query = query,
+                    onQueryChange = { query = it },
+                    modifier = Modifier.focusRequester(focusRequester)
+                )
+
+                Spacer(modifier = Modifier.height(MirageTokens.spaceMd))
+
+                val showStatus = modules.isNotEmpty() || searchEngine.indexedCount > 0
+                if (showStatus) {
+                    StatusArea(
+                        modules = modules,
+                        indexedCount = searchEngine.indexedCount,
+                        onAddServer = onAddServer,
+                        onSync = {
+                            scope.launch {
+                                onSync()
+                                results = searchEngine.search(query)
+                            }
                         }
-                        true
-                    }
-                    event.key == Key.Enter && event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown -> {
-                        handleOpenSelected()
-                        true
-                    }
-                    else -> false
+                    )
+                    Spacer(modifier = Modifier.height(MirageTokens.spaceMd))
                 }
-            }
-    ) {
-        // Left side: search input, status bar and result list.
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .weight(0.55f)
-                .padding(16.dp)
-        ) {
-            SearchHeader(
-                query = query,
-                onQueryChange = { newQuery ->
-                    query = newQuery
-                    scope.launch {
-                        results = searchEngine.search(newQuery)
-                    }
-                },
-                onOpenSettings = onOpenSettings
-            )
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            StatusBar(
-                indexedCount = searchEngine.indexedCount,
-                onStartIndexing = { /* TODO: trigger local indexing */ },
-                onAddServer = onAddServer,
-                onSync = {
-                    scope.launch {
-                        onSync()
-                        results = searchEngine.search(query)
-                    }
+                if (results.isNotEmpty()) {
+                    HorizontalDivider(color = MirageTokens.colorBorder)
+                    Spacer(modifier = Modifier.height(MirageTokens.spaceMd))
                 }
-            )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                if (query.isNotBlank() && results.isEmpty()) {
+                    EmptyResults(query = query)
+                } else if (results.isNotEmpty()) {
+                    ResultsList(
+                        results = results,
+                        selectedIndex = selectedIndex,
+                        onSelect = { selectedIndex = it },
+                        onOpen = handleOpenSelected,
+                        vfsAdapter = vfsAdapter
+                    )
+                }
 
-            if (results.isEmpty()) {
-                EmptyResults(query = query)
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    itemsIndexed(results, key = { _, result -> result.id }) { index, result ->
-                        ResultRow(
-                            result = result,
-                            vfsAdapter = vfsAdapter,
-                            isSelected = index == selectedIndex,
-                            onSelect = { selectedIndex = index },
-                            onOpen = handleOpenSelected
-                        )
-                    }
+                Spacer(modifier = Modifier.weight(1f))
+
+                if (results.isNotEmpty() || query.isNotBlank()) {
+                    SearchFooter(
+                        onOpenSettings = onOpenSettings,
+                        onOpenSelected = handleOpenSelected
+                    )
                 }
             }
         }
+    }
+}
 
-        // Right side: preview panel.
-        PreviewPanel(
-            result = results.getOrNull(selectedIndex),
-            vfsAdapter = vfsAdapter,
-            modifier = Modifier
-                .fillMaxHeight()
-                .weight(0.45f)
-                .padding(top = 16.dp, bottom = 16.dp, end = 16.dp)
+@Composable
+private fun WindowDragArea(modifier: Modifier = Modifier) {
+    val window = LocalWindow.current
+    if (window == null) return
+    Box(
+        modifier = modifier.pointerInput(window) {
+            detectDragGestures { _, dragAmount ->
+                val current = window.location
+                window.setLocation(
+                    current.x + dragAmount.x.toInt(),
+                    current.y + dragAmount.y.toInt()
+                )
+            }
+        }
+    )
+}
+
+@Composable
+private fun SearchInput(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(color = MirageTokens.colorBg, shape = RoundedCornerShape(MirageTokens.radiusMd))
+            .drawBehind {
+                // Outer gray border.
+                drawRect(
+                    color = MirageTokens.colorBorder,
+                    topLeft = Offset.Zero,
+                    size = size
+                )
+                // Inner white fill leaving a 1px border.
+                drawRect(
+                    color = MirageTokens.colorBg,
+                    topLeft = Offset(1.dp.toPx(), 1.dp.toPx()),
+                    size = androidx.compose.ui.geometry.Size(
+                        width = size.width - 2.dp.toPx(),
+                        height = size.height - 2.dp.toPx()
+                    )
+                )
+            }
+            .padding(MirageTokens.inputPadding)
+    ) {
+        TextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = modifier.fillMaxWidth(),
+            singleLine = true,
+            textStyle = TextStyle(
+                fontSize = MirageTokens.textInput,
+                color = MirageTokens.colorTextPrimary
+            ),
+            placeholder = {
+                Text(
+                    text = "Search everything",
+                    fontSize = MirageTokens.textInput,
+                    color = MirageTokens.colorTextSecondary
+                )
+            },
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                focusedIndicatorColor = MirageTokens.colorInputBorder,
+                unfocusedIndicatorColor = MirageTokens.colorInputBorder,
+                focusedTextColor = MirageTokens.colorTextPrimary,
+                unfocusedTextColor = MirageTokens.colorTextPrimary,
+                focusedPlaceholderColor = MirageTokens.colorTextSecondary,
+                unfocusedPlaceholderColor = MirageTokens.colorTextSecondary
+            )
         )
     }
 }
 
 @Composable
-private fun SearchHeader(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onOpenSettings: () -> Unit
+private fun StatusArea(
+    modules: List<ModuleStatus>,
+    indexedCount: Int,
+    onAddServer: () -> Unit,
+    onSync: () -> Unit
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth()
+    Column(
+        verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm)
     ) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            placeholder = { Text("Search files, clipboard, vaults...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-            modifier = Modifier.weight(1f),
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp)
-        )
+        if (modules.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Modules:",
+                    fontSize = MirageTokens.textResultMeta,
+                    color = MirageTokens.colorTextSecondary
+                )
+                modules.forEach { module ->
+                    ModuleTag(module = module)
+                }
+            }
+        }
 
-        IconButton(onClick = onOpenSettings) {
-            Icon(Icons.Default.Settings, contentDescription = "Settings")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "$indexedCount indexed",
+                fontSize = MirageTokens.textResultMeta,
+                color = MirageTokens.colorTextSecondary
+            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Sync",
+                    fontSize = MirageTokens.textResultMeta,
+                    color = MirageTokens.colorTextSecondary,
+                    modifier = Modifier.clickableNoRipple(onClick = onSync)
+                )
+                Text(
+                    text = "Add server",
+                    fontSize = MirageTokens.textResultMeta,
+                    color = MirageTokens.colorTextSecondary,
+                    modifier = Modifier.clickableNoRipple(onClick = onAddServer)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModuleTag(module: ModuleStatus) {
+    val background = if (module.ready) MirageTokens.colorSelectedBg else MirageTokens.colorKeyBg
+    val textColor = if (module.ready) MirageTokens.colorTextPrimary else MirageTokens.colorTextSecondary
+    val label = buildString {
+        append(module.label)
+        module.progress?.let { append(" ${(it * 100).toInt()}%") }
+    }
+    Box(
+        modifier = Modifier
+            .background(color = background, shape = RoundedCornerShape(MirageTokens.radiusSm))
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = label,
+            fontSize = MirageTokens.textResultMeta,
+            color = textColor
+        )
+    }
+}
+
+@Composable
+private fun ResultsList(
+    results: List<SearchResult>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    onOpen: () -> Unit,
+    vfsAdapter: VfsAdapter
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceXs)
+    ) {
+        itemsIndexed(results, key = { _, result -> result.id }) { index, result ->
+            ResultRow(
+                result = result,
+                vfsAdapter = vfsAdapter,
+                isSelected = index == selectedIndex,
+                onSelect = { onSelect(index) },
+                onOpen = onOpen
+            )
         }
     }
 }
@@ -229,72 +402,64 @@ private fun ResultRow(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
-    val scope = rememberCoroutineScope()
     var thumbnail by remember { mutableStateOf<ByteArray?>(null) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(result) {
         thumbnail = vfsAdapter.fetchThumbnail(result.relativePath)
     }
 
-    Surface(
-        onClick = {
-            onSelect()
-            onOpen()
-        },
+    val background = when {
+        isSelected -> MirageTokens.colorSelectedBg
+        isHovered -> MirageTokens.colorHoverBg
+        else -> Color.Transparent
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .hoverable(interactionSource),
-        shape = RoundedCornerShape(12.dp),
-        color = when {
-            isSelected -> MaterialTheme.colorScheme.primaryContainer
-            isHovered -> MaterialTheme.colorScheme.surfaceVariant
-            else -> MaterialTheme.colorScheme.surface
-        }
+            .height(MirageTokens.resultHeight)
+            .background(color = background, shape = RoundedCornerShape(MirageTokens.radiusMd))
+            .hoverable(interactionSource)
+            .clickableNoRipple {
+                onSelect()
+                onOpen()
+            }
+            .padding(horizontal = MirageTokens.spaceMd, vertical = MirageTokens.spaceSm)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(12.dp)
+        FileIcon(
+            fileType = result.fileType(),
+            thumbnail = thumbnail,
+            modifier = Modifier.size(32.dp)
+        )
+
+        Spacer(modifier = Modifier.width(MirageTokens.spaceMd))
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            FileIcon(
-                fileType = result.fileType(),
-                thumbnail = thumbnail,
-                modifier = Modifier.size(40.dp)
+            Text(
+                text = result.fileName(),
+                fontSize = MirageTokens.textResultTitle,
+                fontWeight = FontWeight.Medium,
+                color = MirageTokens.colorTextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = result.fileName(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = result.sourceType,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .background(
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = CircleShape
-                    )
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = "%.2f".format(result.score),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
+            Text(
+                text = result.relativePath,
+                fontSize = MirageTokens.textResultMeta,
+                color = MirageTokens.colorTextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
+
+        Spacer(modifier = Modifier.width(MirageTokens.spaceMd))
+
+        ShortcutHint(label = "open", key = "↵")
     }
 }
 
@@ -330,255 +495,87 @@ private fun FileIcon(
         FileType.Document -> Icons.Default.Description
         FileType.Unknown -> Icons.AutoMirrored.Filled.InsertDriveFile
     }
-    val tint = when (fileType) {
-        FileType.Image -> Color(0xFF4CAF50)
-        FileType.Video -> Color(0xFFE91E63)
-        FileType.Audio -> Color(0xFF9C27B0)
-        FileType.Document -> Color(0xFF2196F3)
-        FileType.Unknown -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Box(
+    Icon(
+        imageVector = icon,
+        contentDescription = fileType.name,
+        tint = MirageTokens.colorTextSecondary,
         modifier = modifier
-            .background(
-                color = tint.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(8.dp)
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = fileType.name,
-            tint = tint,
-            modifier = Modifier.size(24.dp)
-        )
-    }
-}
-
-@Composable
-private fun PreviewPanel(
-    result: SearchResult?,
-    vfsAdapter: VfsAdapter,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxHeight()
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        if (result == null) {
-            Text(
-                text = "Select a result to preview",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            return
-        }
-
-        val scope = rememberCoroutineScope()
-        var preview by remember(result) { mutableStateOf<ByteArray?>(null) }
-
-        LaunchedEffect(result) {
-            preview = vfsAdapter.fetchThumbnail(result.relativePath)
-        }
-
-        when (result.fileType()) {
-            FileType.Image -> ImagePreview(bytes = preview)
-            FileType.Video -> VideoPreview(thumbnail = preview)
-            else -> DocumentPreview(result = result)
-        }
-    }
-}
-
-@Composable
-private fun ImagePreview(bytes: ByteArray?) {
-    if (bytes == null) {
-        PlaceholderPreview(text = "No preview available")
-        return
-    }
-
-    val imageBitmap = remember(bytes) {
-        try {
-            Image.makeFromEncoded(bytes).toComposeImageBitmap()
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    if (imageBitmap != null) {
-        Image(
-            bitmap = imageBitmap,
-            contentDescription = "Preview",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
-    } else {
-        PlaceholderPreview(text = "Unable to decode image")
-    }
-}
-
-@Composable
-private fun VideoPreview(thumbnail: ByteArray?) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        if (thumbnail != null) {
-            val imageBitmap = remember(thumbnail) {
-                try {
-                    Image.makeFromEncoded(thumbnail).toComposeImageBitmap()
-                } catch (_: Exception) {
-                    null
-                }
-            }
-            if (imageBitmap != null) {
-                Image(
-                    bitmap = imageBitmap,
-                    contentDescription = "Video thumbnail",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .background(
-                    color = Color.Black.copy(alpha = 0.6f),
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = "Play",
-                tint = Color.White,
-                modifier = Modifier.size(32.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun DocumentPreview(result: SearchResult) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        FileIcon(
-            fileType = result.fileType(),
-            thumbnail = null,
-            modifier = Modifier.size(80.dp)
-        )
-        Text(
-            text = result.fileName(),
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center
-        )
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = result.relativePath,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "Source: ${result.sourceType}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "Score: %.3f".format(result.score),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun PlaceholderPreview(text: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
+    )
 }
 
 @Composable
 private fun EmptyResults(query: String) {
     Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceXs)
     ) {
-        if (query.isBlank()) {
-            Text(
-                text = "Start typing to search",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center
-            )
-        } else {
-            Text(
-                text = "No results for \"$query\"",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "Make sure indexing has started and vaults are connected.",
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
+        Text(
+            text = "No results for \"$query\"",
+            fontSize = MirageTokens.textInput,
+            color = MirageTokens.colorTextPrimary
+        )
+        Text(
+            text = "Make sure indexing has started and servers are connected.",
+            fontSize = MirageTokens.textResultMeta,
+            color = MirageTokens.colorTextSecondary
+        )
     }
 }
 
 @Composable
-private fun StatusBar(
-    indexedCount: Int,
-    onStartIndexing: () -> Unit,
-    onAddServer: () -> Unit,
-    onSync: () -> Unit
+private fun SearchFooter(
+    onOpenSettings: () -> Unit,
+    onOpenSelected: () -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = "$indexedCount indexed",
-            style = MaterialTheme.typography.labelMedium
-        )
+    Column {
+        HorizontalDivider(color = MirageTokens.colorBorder)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = MirageTokens.spaceMd),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ShortcutHint(label = "open", key = "↵")
+            }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = onStartIndexing) {
-                Text("Start indexing")
-            }
-            TextButton(onClick = onSync) {
-                Text("Sync")
-            }
-            Button(onClick = onAddServer) {
-                Text("Add server")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "settings",
+                    fontSize = MirageTokens.textFooter,
+                    color = MirageTokens.colorTextSecondary,
+                    modifier = Modifier.clickableNoRipple(onClick = onOpenSettings)
+                )
+                Box(
+                    modifier = Modifier
+                        .background(color = MirageTokens.colorKeyBg, shape = RoundedCornerShape(MirageTokens.radiusSm))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .clickableNoRipple(onClick = onOpenSettings)
+                ) {
+                    Text(
+                        text = "⌘,",
+                        fontSize = MirageTokens.textFooter,
+                        color = MirageTokens.colorKeyText
+                    )
+                }
             }
         }
     }
 }
+
+private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier =
+    this.then(
+        androidx.compose.foundation.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick
+        )
+    )

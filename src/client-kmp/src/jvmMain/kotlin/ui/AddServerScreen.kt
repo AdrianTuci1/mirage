@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.launch
+import mirage.desktop.ui.theme.MirageTheme
 import mirage.search.SearchEngine
 import mirage.vault.RemoteVaultManager
 import mirage.vault.ServerConnection
@@ -47,7 +48,7 @@ fun AddServerScreen(
         title = "Add Server",
         state = rememberWindowState(width = 520.dp, height = 460.dp)
     ) {
-        MaterialTheme {
+        MirageTheme {
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
