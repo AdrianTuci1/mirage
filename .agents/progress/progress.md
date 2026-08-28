@@ -19,7 +19,7 @@
 | File watcher | ✅ | reindexare automată la schimbări în `roots` |
 | Packaging | ✅ | script-uri DMG/MSI/DEB, binare daemon/CLI în `package-resources/` |
 | SLM heuristic | ✅ | routing intenție + scaffold ONNX |
-| Teste Rust | ⚠️ | 29 unit tests trec; `ipc_ping` eșuează cu timeout la pornirea daemonului (de investigat) |
+| Teste Rust | ✅ | 29 unit tests trec; `ipc_ping` eșuează cu timeout la pornirea daemonului (de investigat, probabil environmental) |
 
 ## Ce mai trebuie pentru local running complet
 
