@@ -25,8 +25,8 @@
 
 | Task | Prioritate | Note |
 |------|------------|------|
-| Config conectori din UI | 🔴 ridicată | Form-uri pentru S3/Dropbox/GDrive/SMB în Settings; momentan se editează `daemon.yaml` |
-| Footer index/module status indicator | 🟡 medie | Design finalizat; implementare vizuală în KMP rămâne |
+| Config conectori din UI | ✅ finalizat | Tab Connectors în Settings cu add/edit/delete; salvare prin `update_connectors` |
+| Footer index/module status indicator | 🟡 medie | Design finalizat; implementare vizuală în KMP rămâne pentru următoarea iterație |
 | Refactor DuckDB/ONNX ca module descărcabile | 🟢 scăzută | Funcționează built-in, dar obiectivul final e modular |
 
 ## Ce este exclus momentan
@@ -72,6 +72,7 @@ Daemonul și CLI-ul sunt copiate în `src/client-kmp/package-resources/{macos,wi
 
 ## Commit-uri recente
 
+- `3a84d97` — configurator conectori în Settings + fixuri compilare daemon (watcher, PathBuf, Arc connectors).
 - `907ffb9` — packaging scripts, file watcher, explicit cloud download.
 - `df0fa5f` — implementare conectori S3/R2, Dropbox, GDrive, SMB.
 - `ce44181` — auto-spawn daemon în CLI și module status real în KMP.
