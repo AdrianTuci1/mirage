@@ -41,6 +41,45 @@ pub struct DaemonConfig {
     pub roots: Vec<PathBuf>,
     /// Directory names to skip while scanning local roots.
     pub excluded_dirs: Vec<String>,
+    /// Cloud / network source connectors configured for metadata indexing.
+    pub connectors: Vec<ConnectorConfig>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConnectorKind {
+    #[default]
+    S3,
+    Dropbox,
+    GoogleDrive,
+    Smb,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
+pub struct ConnectorConfig {
+    pub id: String,
+    pub name: String,
+    pub kind: ConnectorKind,
+    pub enabled: bool,
+    /// Root prefix/prefixes for the connector (e.g. bucket prefix or share path).
+    pub roots: Vec<String>,
+    pub credentials: ConnectorCredentials,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
+pub struct ConnectorCredentials {
+    pub access_key: Option<String>,
+    pub secret_key: Option<String>,
+    pub region: Option<String>,
+    pub endpoint: Option<String>,
+    pub bucket: Option<String>,
+    pub oauth_token: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub host: Option<String>,
+    pub share: Option<String>,
 }
 
 impl DaemonConfig {
@@ -88,6 +127,7 @@ impl Default for DaemonConfig {
                 "build".to_string(),
                 ".cache".to_string(),
             ],
+            connectors: Vec::new(),
         }
     }
 }

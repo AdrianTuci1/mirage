@@ -40,6 +40,7 @@ import mirage.vault.RemoteVaultManager
 import mirage.vault.ServerConnection
 import java.awt.Desktop
 import java.io.File
+import java.net.URI
 
 fun main() = application {
     var isSearchVisible by remember { mutableStateOf(false) }
@@ -158,28 +159,13 @@ fun main() = application {
                     SearchScreen(
                         search = { query -> daemonClient?.search(query) ?: emptyList() },
                         onOpenResult = { result ->
-                            when (result.category) {
-                                SearchResultCategory.APP -> {
-                                    result.relativePath.takeIf { it.isNotBlank() }?.let { path ->
-                                        if (Desktop.isDesktopSupported()) {
-                                            Desktop.getDesktop().open(File(path))
-                                        }
-                                    }
-                                }
-                                SearchResultCategory.FILE -> {
-                                    result.relativePath.takeIf { it.isNotBlank() }?.let { path ->
-                                        if (Desktop.isDesktopSupported()) {
-                                            Desktop.getDesktop().open(File(path))
-                                        }
-                                    }
-                                }
-                                SearchResultCategory.SEMANTIC -> {
-                                    // Semantic results currently open the file path; later this
-                                    // may preview media in-app.
-                                    result.relativePath.takeIf { it.isNotBlank() }?.let { path ->
-                                        if (Desktop.isDesktopSupported()) {
-                                            Desktop.getDesktop().open(File(path))
-                                        }
+                            val openUrl = result.openUrl?.takeIf { it.isNotBlank() }
+                            if (openUrl != null) {
+                                openExternalUrl(openUrl)
+                            } else {
+                                result.relativePath.takeIf { it.isNotBlank() }?.let { path ->
+                                    if (Desktop.isDesktopSupported()) {
+                                        Desktop.getDesktop().open(File(path))
                                     }
                                 }
                             }
@@ -203,7 +189,10 @@ fun main() = application {
                         },
                         onOpenSettings = { isSettingsVisible = true },
                         onAddServer = { isAddServerVisible = true },
-                        onSync = { remoteManagers.forEach { it.syncDeltaIndex() } }
+                        onSync = { remoteManagers.forEach { it.syncDeltaIndex() } },
+                        onDownloadResult = {
+                            // TODO: implement explicit download-to-Downloads flow.
+                        }
                     )
                 }
             }
@@ -229,5 +218,27 @@ fun main() = application {
             },
             onDismiss = { isAddServerVisible = false }
         )
+    }
+}
+
+private fun openExternalUrl(url: String) {
+    if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+        try {
+            Desktop.getDesktop().browse(URI(url))
+            return
+        } catch (_: Exception) {
+            // Fall back to OS-specific handlers below.
+        }
+    }
+    val os = System.getProperty("os.name").lowercase()
+    val command = when {
+        os.contains("mac") -> arrayOf("open", url)
+        os.contains("win") -> arrayOf("rundll32", "url.dll,FileProtocolHandler", url)
+        else -> arrayOf("xdg-open", url)
+    }
+    try {
+        ProcessBuilder(*command).inheritIO().start()
+    } catch (e: Exception) {
+        e.printStackTrace()
     }
 }

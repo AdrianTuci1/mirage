@@ -46,6 +46,8 @@ fun fileTypeOf(fileName: String): FileType {
  */
 fun SearchResult.fileType(): FileType = fileTypeOf(relativePath)
 
+fun SearchResult.fileName(): String = relativePath.substringAfterLast('/').substringAfterLast('\\').ifBlank { relativePath }
+
 /**
  * Returns the last path segment (file name) of [relativePath].
  */

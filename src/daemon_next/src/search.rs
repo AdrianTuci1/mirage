@@ -1,4 +1,5 @@
 use crate::apps::AppIndex;
+use crate::connectors::ConnectorRegistry;
 use crate::db::LanceDbStore;
 use crate::embeddings::Embedder;
 use crate::local_index::{LocalFileIndex, LocalSearchResult};
@@ -19,6 +20,7 @@ pub struct UnifiedSearch {
     app_index: Mutex<AppIndex>,
     roots: Vec<PathBuf>,
     excluded_dirs: Vec<String>,
+    connectors: Arc<ConnectorRegistry>,
 }
 
 impl UnifiedSearch {
@@ -27,6 +29,7 @@ impl UnifiedSearch {
         embedder: Arc<dyn Embedder>,
         roots: Vec<PathBuf>,
         excluded_dirs: Vec<String>,
+        connectors: ConnectorRegistry,
     ) -> Self {
         Self {
             store,
@@ -35,17 +38,50 @@ impl UnifiedSearch {
             app_index: Mutex::new(AppIndex::new()),
             roots,
             excluded_dirs,
+            connectors: Arc::new(connectors),
         }
     }
 
-    /// Scan the configured roots and rebuild the file name index.
-    pub fn index_files(&self) -> Result<usize> {
-        let mut index = self
-            .file_index
-            .lock()
-            .map_err(|e| anyhow::anyhow!("failed to lock file index: {}", e))?;
-        index.index_roots(&self.roots, &self.excluded_dirs);
-        Ok(index.count())
+    /// Scan the configured roots and configured cloud connectors and rebuild the
+    /// file name index. Cloud connectors are only indexed by metadata; no file
+    /// content is downloaded.
+    pub async fn index_files(&self) -> Result<usize> {
+        {
+            let mut index = self
+                .file_index
+                .lock()
+                .map_err(|e| anyhow::anyhow!("failed to lock file index: {}", e))?;
+            // Reset remote entries before re-indexing.
+            index.clear_remote_entries();
+            index.index_roots(&self.roots, &self.excluded_dirs);
+        }
+
+        // Index configured cloud sources by metadata only. Collect entries
+        // without holding the lock across await points.
+        let mut remote_batches: Vec<(String, Vec<crate::connectors::RemoteEntry>)> = Vec::new();
+        for (id, connector) in self.connectors.iter() {
+            tracing::info!("indexing connector {}", id);
+            match connector.list_entries("").await {
+                Ok(entries) => {
+                    tracing::info!("connector {} listed {} entries", id, entries.len());
+                    remote_batches.push((id.to_string(), entries));
+                }
+                Err(e) => {
+                    tracing::warn!("connector {} list failed: {}", id, e);
+                }
+            }
+        }
+
+        {
+            let mut index = self
+                .file_index
+                .lock()
+                .map_err(|e| anyhow::anyhow!("failed to lock file index: {}", e))?;
+            for (id, entries) in remote_batches {
+                index.index_remote_entries(&id, entries);
+            }
+            Ok(index.count())
+        }
     }
 
     /// Refresh the OS application index.
@@ -110,6 +146,7 @@ impl UnifiedSearch {
                     score: r.score,
                     source_type: r.record.source_type,
                     category: SearchResultCategory::Semantic,
+                    open_url: None,
                 });
             }
         }
@@ -153,16 +190,18 @@ fn app_to_search_result(r: crate::apps::AppSearchResult) -> SearchResult {
         score: r.score,
         source_type: r.source,
         category: SearchResultCategory::App,
+        open_url: None,
     }
 }
 
 fn file_to_search_result(r: LocalSearchResult) -> SearchResult {
     SearchResult {
-        id: format!("file://{}", r.absolute_path),
+        id: r.id,
         relative_path: r.relative_path,
         score: r.score,
         source_type: r.source_type,
         category: SearchResultCategory::File,
+        open_url: r.open_url,
     }
 }
 
@@ -219,8 +258,9 @@ mod tests {
             embedder,
             vec![root],
             vec![],
+            crate::connectors::ConnectorRegistry::empty(),
         );
-        search.index_files().unwrap();
+        search.index_files().await.unwrap();
 
         let results = search.search("budget", 10).await.unwrap();
         assert!(!results.is_empty());

@@ -1,5 +1,6 @@
 pub mod analytics;
 pub mod config;
+pub mod connectors;
 pub mod db;
 pub mod embeddings;
 pub mod apps;

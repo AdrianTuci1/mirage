@@ -155,6 +155,7 @@ impl IpcServer {
                                 source_type: r.record.source_type,
                                 score: r.score,
                                 category: SearchResultCategory::Semantic,
+                                open_url: None,
                             })
                             .collect()
                     }
@@ -205,7 +206,7 @@ impl IpcServer {
         server.register("index_files", move |_params: Value| {
             let search = Arc::clone(&index_files_search);
             Box::pin(async move {
-                let count = search.index_files().map_err(|e| {
+                let count = search.index_files().await.map_err(|e| {
                     JsonRpcError::new(
                         crate::ipc::protocol::ERROR_INTERNAL_ERROR,
                         format!("index_files failed: {}", e),

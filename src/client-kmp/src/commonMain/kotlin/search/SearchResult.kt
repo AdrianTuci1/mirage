@@ -25,5 +25,7 @@ data class SearchResult(
     val relativePath: String,
     val sourceType: String,
     val score: Double,
-    val category: SearchResultCategory = SearchResultCategory.SEMANTIC
+    val category: SearchResultCategory = SearchResultCategory.SEMANTIC,
+    @SerialName("open_url")
+    val openUrl: String? = null
 )

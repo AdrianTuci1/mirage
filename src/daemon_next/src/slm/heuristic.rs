@@ -63,6 +63,7 @@ impl SlmEngine for HeuristicSlmEngine {
                     score: r.score,
                     source_type: r.record.source_type,
                     category: crate::models::SearchResultCategory::Semantic,
+                    open_url: None,
                 })
                 .collect();
 

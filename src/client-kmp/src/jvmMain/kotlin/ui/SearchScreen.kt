@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
@@ -48,6 +49,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
@@ -94,7 +96,8 @@ fun SearchScreen(
     onStartIndexing: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onAddServer: () -> Unit = {},
-    onSync: suspend () -> Unit = {}
+    onSync: suspend () -> Unit = {},
+    onDownloadResult: (mirage.search.SearchResult) -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
     var results by remember(query) { mutableStateOf(emptyList<mirage.search.SearchResult>()) }
@@ -115,6 +118,13 @@ fun SearchScreen(
         val selected = results.getOrNull(selectedIndex)
         if (selected != null) {
             onOpenResult(selected)
+        }
+    }
+
+    val handleDownloadSelected: () -> Unit = {
+        val selected = results.getOrNull(selectedIndex)
+        if (selected != null) {
+            onDownloadResult(selected)
         }
     }
 
@@ -144,7 +154,11 @@ fun SearchScreen(
                             }
 
                             event.key == Key.Enter && event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown -> {
-                                handleOpenSelected()
+                                if (event.isShiftPressed) {
+                                    handleDownloadSelected()
+                                } else {
+                                    handleOpenSelected()
+                                }
                                 true
                             }
 
@@ -203,7 +217,9 @@ fun SearchScreen(
                 if (results.isNotEmpty() || query.isNotBlank()) {
                     SearchFooter(
                         onOpenSettings = onOpenSettings,
-                        onOpenSelected = handleOpenSelected
+                        onOpenSelected = handleOpenSelected,
+                        onDownloadSelected = handleDownloadSelected,
+                        showDownload = results.getOrNull(selectedIndex)?.openUrl?.isNotBlank() == true
                     )
                 }
             }
@@ -463,6 +479,17 @@ private fun ResultRow(
 
         Spacer(modifier = Modifier.width(MirageTokens.spaceMd))
 
+        if (result.sourceType != "local" && result.sourceType != "app") {
+            Icon(
+                imageVector = Icons.Default.Cloud,
+                contentDescription = "Cloud",
+                tint = MirageTokens.colorTextSecondary,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(MirageTokens.spaceMd))
+
         ShortcutHint(label = "open", key = "↵")
     }
 }
@@ -530,7 +557,9 @@ private fun EmptyResults(query: String) {
 @Composable
 private fun SearchFooter(
     onOpenSettings: () -> Unit,
-    onOpenSelected: () -> Unit
+    onOpenSelected: () -> Unit,
+    onDownloadSelected: () -> Unit,
+    showDownload: Boolean
 ) {
     Column {
         HorizontalDivider(color = MirageTokens.colorBorder)
@@ -546,6 +575,9 @@ private fun SearchFooter(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ShortcutHint(label = "open", key = "↵")
+                if (showDownload) {
+                    ShortcutHint(label = "download", key = "shift+↵")
+                }
             }
 
             Row(
@@ -571,6 +603,31 @@ private fun SearchFooter(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ShortcutHint(label: String, key: String) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceXs),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            fontSize = MirageTokens.textFooter,
+            color = MirageTokens.colorTextSecondary
+        )
+        Box(
+            modifier = Modifier
+                .background(color = MirageTokens.colorKeyBg, shape = RoundedCornerShape(MirageTokens.radiusSm))
+                .padding(horizontal = 4.dp, vertical = 2.dp)
+        ) {
+            Text(
+                text = key,
+                fontSize = MirageTokens.textFooter,
+                color = MirageTokens.colorKeyText
+            )
         }
     }
 }

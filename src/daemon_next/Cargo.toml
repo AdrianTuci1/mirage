@@ -36,6 +36,14 @@ fs2 = "0.4"
 async-trait = "0.1"
 dirs = "5"
 tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio"] }
+aws-config = "1"
+pavao = { version = "0.2", optional = true }
+urlencoding = "2"
+
+[features]
+default = []
+smb = ["dep:pavao"]
 
 [dev-dependencies]
 tempfile = "3"

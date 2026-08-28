@@ -391,6 +391,7 @@ async fn run_semantic_search(
     let results: Vec<crate::models::SearchResult> = raw
         .into_iter()
         .map(|r| crate::models::SearchResult {
+            open_url: None,
             id: r.record.id,
             relative_path: r.record.relative_path,
             score: r.score,

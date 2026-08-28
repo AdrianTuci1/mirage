@@ -14,18 +14,22 @@ pub struct LocalFileIndex {
 
 #[derive(Debug, Clone)]
 pub struct LocalEntry {
+    pub id: String,
     pub absolute_path: PathBuf,
     pub relative_path: String,
     pub file_name: String,
     pub source_type: String,
+    pub open_url: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LocalSearchResult {
+    pub id: String,
     pub absolute_path: String,
     pub relative_path: String,
     pub file_name: String,
     pub source_type: String,
+    pub open_url: Option<String>,
     pub score: f64,
 }
 
@@ -43,6 +47,36 @@ impl LocalFileIndex {
             self.walk(root, excluded_dirs);
         }
 
+        self.rebuild_token_index();
+    }
+
+    pub fn index_remote_entries(
+        &mut self,
+        source_type: &str,
+        entries: Vec<crate::connectors::RemoteEntry>,
+    ) {
+        let source_type = source_type.to_string();
+        for entry in entries {
+            let file_name = entry.name.clone();
+            self.entries.push(LocalEntry {
+                id: entry.id.clone(),
+                absolute_path: PathBuf::from(&entry.path),
+                relative_path: entry.path,
+                file_name,
+                source_type: source_type.clone(),
+                open_url: entry.open_url,
+            });
+        }
+        self.rebuild_token_index();
+    }
+
+    pub fn clear_remote_entries(&mut self) {
+        self.entries.retain(|e| e.source_type == "local");
+        self.rebuild_token_index();
+    }
+
+    fn rebuild_token_index(&mut self) {
+        self.name_to_indices.clear();
         for (idx, entry) in self.entries.iter().enumerate() {
             for token in path_tokens(&entry.relative_path) {
                 self.name_to_indices
@@ -97,10 +131,12 @@ impl LocalFileIndex {
                     }
                     let relative_path = strip_root(root, &path);
                     self.entries.push(LocalEntry {
+                        id: format!("file://{}", path.to_string_lossy()),
                         absolute_path: path.clone(),
                         relative_path: relative_path.clone(),
                         file_name: file_name.clone(),
-                        source_type: source_type_from_path(&path),
+                        source_type: "local".to_string(),
+                        open_url: None,
                     });
                 }
             }
@@ -121,10 +157,12 @@ impl LocalFileIndex {
                 let score = score_match(&q, entry);
                 if score > 0.0 {
                     Some(LocalSearchResult {
+                        id: entry.id.clone(),
                         absolute_path: entry.absolute_path.to_string_lossy().to_string(),
                         relative_path: entry.relative_path.clone(),
                         file_name: entry.file_name.clone(),
                         source_type: entry.source_type.clone(),
+                        open_url: entry.open_url.clone(),
                         score,
                     })
                 } else {
@@ -157,15 +195,8 @@ fn path_tokens(path: &str) -> Vec<String> {
         .collect()
 }
 
-fn source_type_from_path(path: &Path) -> String {
-    match path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).as_deref() {
-        Some("jpg") | Some("jpeg") | Some("png") | Some("gif") | Some("webp") | Some("heic") => "image".to_string(),
-        Some("mp4") | Some("mov") | Some("mkv") | Some("avi") => "video".to_string(),
-        Some("mp3") | Some("wav") | Some("aac") | Some("flac") | Some("m4a") => "audio".to_string(),
-        Some("pdf") | Some("doc") | Some("docx") | Some("txt") | Some("md") | Some("rtf") => "document".to_string(),
-        Some("csv") | Some("xlsx") | Some("xls") | Some("tsv") => "spreadsheet".to_string(),
-        _ => "file".to_string(),
-    }
+fn source_type_from_path(_path: &Path) -> String {
+    "local".to_string()
 }
 
 fn score_match(query: &str, entry: &LocalEntry) -> f64 {

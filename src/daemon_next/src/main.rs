@@ -90,11 +90,13 @@ async fn main() -> Result<()> {
     let analytics = Arc::new(Analytics::open(&config).context("failed to open DuckDB analytics")?);
     let module_manager = Arc::new(ModuleManager::new(&config, None).await);
     let slm: Arc<dyn mirage_daemon::SlmEngine> = Arc::new(mirage_daemon::HeuristicSlmEngine::new(10));
+    let connectors = mirage_daemon::connectors::registry_from_config(&config.connectors);
     let unified_search = Arc::new(UnifiedSearch::new(
         Arc::clone(&store),
         Arc::clone(&embedder),
         config.roots.clone(),
         config.excluded_dirs.clone(),
+        connectors,
     ));
 
     let server = IpcServer::new(store, embedder, analytics, module_manager, slm, unified_search);

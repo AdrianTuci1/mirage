@@ -27,6 +27,8 @@ pub struct SearchResult {
     pub source_type: String,
     #[serde(default = "default_search_category")]
     pub category: SearchResultCategory,
+    #[serde(default)]
+    pub open_url: Option<String>,
 }
 
 fn default_search_category() -> SearchResultCategory {
