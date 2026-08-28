@@ -8,6 +8,7 @@
 - **Wizard/onboarding:** exclus momentan; modulele se gestionează direct din Settings → Modules.
 - **Build artifacts:** directorul `src/daemon_next/target/` a fost curățat (~20GB eliberați).
 - **Buget memorie indexare:** daemonul respectă `memory_budget_mb` (default 3072 MB); batching embeddings, upsert LanceDB și procesare cloud sunt limitate de acest buget.
+- **Build artifacts:** directorul `src/daemon_next/target/` a fost curățat din nou (~20.5GB eliberați); nu au rămas fișiere `.log`.
 
 ## Ce funcționează local (finalizat)
 
