@@ -18,6 +18,7 @@
 | CLI `mirage` | ✅ | search, query, status, ask, module, auto-spawn daemon |
 | KMP GUI (cod) | ✅ | floating search, tray, hotkey, IPC, module status, cloud badge, open URL, Shift+Enter download |
 | Conectori cloud | ✅ | S3/R2, Dropbox, Google Drive, SMB (metadata + open URL, download explicit) |
+| Clipboard history | ✅ | Istoric clipboard în Spotlight (Tab pentru toggle), text, imagini, fișiere, preview + metadate, navigare ↑/↓ |
 | Module manager | ✅ | catalog, manifest, download/verify/extract, progress, status |
 | File watcher | ✅ | reindexare automată la schimbări în `roots` |
 | Packaging | ✅ | script-uri DMG/MSI/DEB, binare daemon/CLI în `package-resources/` |

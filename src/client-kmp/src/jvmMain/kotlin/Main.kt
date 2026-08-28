@@ -27,6 +27,7 @@ import mirage.desktop.platform.GlobalShortcutManager
 import mirage.desktop.platform.SystemTrayManager
 import mirage.desktop.platform.centerOnActiveScreen
 import mirage.desktop.ui.AddServerScreen
+import mirage.desktop.ui.ClipboardHistoryScreen
 import mirage.desktop.ui.ModuleStatus
 import mirage.desktop.ui.SearchScreen
 import mirage.desktop.ui.SettingsWindow
@@ -44,6 +45,7 @@ import java.net.URI
 
 fun main() = application {
     var isSearchVisible by remember { mutableStateOf(false) }
+    var isClipboardVisible by remember { mutableStateOf(false) }
     var isSettingsVisible by remember { mutableStateOf(false) }
     var isAddServerVisible by remember { mutableStateOf(false) }
     val clipboardManager = remember { ClipboardManager() }
@@ -155,11 +157,20 @@ fun main() = application {
                 position = WindowPosition(x.dp, y.dp)
             ),
             onPreviewKeyEvent = { event ->
-                if (event.key == Key.Escape && event.type == KeyEventType.KeyUp) {
-                    isSearchVisible = false
-                    true
-                } else {
-                    false
+                when {
+                    event.key == Key.Escape && event.type == KeyEventType.KeyUp -> {
+                        if (isClipboardVisible) {
+                            isClipboardVisible = false
+                        } else {
+                            isSearchVisible = false
+                        }
+                        true
+                    }
+                    event.key == Key.Tab && event.type == KeyEventType.KeyDown -> {
+                        isClipboardVisible = !isClipboardVisible
+                        true
+                    }
+                    else -> false
                 }
             }
         ) {
@@ -169,8 +180,22 @@ fun main() = application {
                     shape = RoundedCornerShape(16.dp),
                     shadowElevation = 8.dp
                 ) {
-                    SearchScreen(
-                        search = { query -> daemonClient?.search(query) ?: emptyList() },
+                    if (isClipboardVisible) {
+                        var clipboardSelectedIndex by remember { mutableStateOf(0) }
+                        ClipboardHistoryScreen(
+                            entries = clipboardManager.history,
+                            selectedIndex = clipboardSelectedIndex,
+                            onSelect = { clipboardSelectedIndex = it },
+                            onCopySelected = {
+                                clipboardManager.history.getOrNull(clipboardSelectedIndex)?.let {
+                                    clipboardManager.copy(it)
+                                }
+                            },
+                            onClose = { isClipboardVisible = false }
+                        )
+                    } else {
+                        SearchScreen(
+                            search = { query -> daemonClient?.search(query) ?: emptyList() },
                         onOpenResult = { result ->
                             val openUrl = result.openUrl?.takeIf { it.isNotBlank() }
                             if (openUrl != null) {
@@ -225,6 +250,7 @@ fun main() = application {
                             }
                         }
                     )
+                    }
                 }
             }
         }

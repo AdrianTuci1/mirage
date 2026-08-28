@@ -631,6 +631,7 @@ private fun SearchFooter(
                 if (showDownload) {
                     ShortcutHint(label = "download", key = "shift+↵")
                 }
+                ShortcutHint(label = "clipboard", key = "tab")
                 Text(
                     text = "settings",
                     fontSize = MirageTokens.textFooter,
@@ -780,15 +781,6 @@ private fun ShortcutHint(label: String, key: String) {
         }
     }
 }
-
-private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier =
-    this.then(
-        androidx.compose.foundation.clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null,
-            onClick = onClick
-        )
-    )
 
 private val mirage.daemon.DaemonModels.ConnectorKind.sourceType: String
     get() = when (this) {
