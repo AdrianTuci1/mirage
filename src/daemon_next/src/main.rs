@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use mirage_daemon::{logging, Analytics, create_embedder, DaemonConfig, IpcServer, LanceDbStore, ModuleManager, UnifiedSearch};
+use mirage_daemon::{logging, Analytics, create_embedder, DaemonConfig, FileWatcher, IpcServer, LanceDbStore, ModuleManager, UnifiedSearch};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -98,6 +98,24 @@ async fn main() -> Result<()> {
         config.excluded_dirs.clone(),
         connectors,
     ));
+
+    let watcher_search = Arc::clone(&unified_search);
+    let watcher = FileWatcher::new(
+        config.roots.clone(),
+        Arc::new(move || {
+            let search = Arc::clone(&watcher_search);
+            tokio::spawn(async move {
+                match search.index_files().await {
+                    Ok(count) => tracing::info!("watcher reindexed {} entries", count),
+                    Err(e) => tracing::warn!("watcher reindex failed: {}", e),
+                }
+            });
+        }),
+    )
+    .ok();
+    if watcher.is_none() {
+        tracing::warn!("failed to start file watcher");
+    }
 
     let server = IpcServer::new(store, embedder, analytics, module_manager, slm, unified_search);
     let config_for_server = config.clone();

@@ -99,6 +99,12 @@ class DaemonClient(
         call("download_module", params)
     }
 
+    suspend fun downloadFile(request: DaemonModels.DownloadFileRequest): DaemonModels.DownloadFileResponse = withContext(Dispatchers.IO) {
+        val params = json.encodeToJsonElement(DaemonModels.DownloadFileRequest.serializer(), request)
+        val response = call("download_file", params)
+        json.decodeFromJsonElement(DaemonModels.DownloadFileResponse.serializer(), response)
+    }
+
     private fun call(method: String, params: JsonElement?): JsonElement {
         val request = JsonRpcRequest(
             id = nextId.getAndIncrement(),

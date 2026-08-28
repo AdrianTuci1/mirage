@@ -63,3 +63,22 @@ data class ModuleIdRequest(
     @SerialName("module_id")
     val moduleId: String
 )
+
+@Serializable
+data class DownloadFileRequest(
+    val id: String,
+    @SerialName("relative_path")
+    val relativePath: String,
+    @SerialName("source_type")
+    val sourceType: String,
+    @SerialName("dest_path")
+    val destPath: String,
+    @SerialName("open_url")
+    val openUrl: String? = null
+)
+
+@Serializable
+data class DownloadFileResponse(
+    @SerialName("dest_path")
+    val destPath: String
+)

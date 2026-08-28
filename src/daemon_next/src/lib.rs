@@ -12,6 +12,7 @@ pub mod models;
 pub mod modules;
 pub mod search;
 pub mod slm;
+pub mod watcher;
 
 pub use daemon_runner::DaemonRunner;
 pub use search::UnifiedSearch;

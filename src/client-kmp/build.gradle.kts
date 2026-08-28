@@ -85,6 +85,28 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Mirage"
             packageVersion = "1.0.0"
+
+            // Extra native binaries (mirage-daemon, mirage CLI) are copied into
+            // this directory by the packaging scripts before running Gradle.
+            appResourcesRootDir.set(project.file("package-resources"))
+
+            modules("java.instrument", "java.sql", "jdk.unsupported")
+
+            macOS {
+                bundleID = "com.mirage.desktop"
+                packageName = "Mirage"
+            }
+
+            windows {
+                shortcut = true
+                menuGroup = "Mirage"
+                dirChooser = true
+                perUserInstall = true
+            }
+
+            linux {
+                menuGroup = "Mirage"
+            }
         }
     }
 }

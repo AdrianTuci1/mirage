@@ -174,6 +174,39 @@ impl UnifiedSearch {
         Ok(index.count())
     }
 
+    /// Download a cloud result to a local path. For local files this copies the file.
+    pub async fn download_result(&self, result: &SearchResult, dest: &std::path::Path) -> Result<()> {
+        if result.source_type == "local" || result.source_type == "app" {
+            let src = std::path::PathBuf::from(&result.relative_path);
+            if src.exists() {
+                tokio::fs::copy(&src, dest).await?;
+                return Ok(());
+            }
+            anyhow::bail!("local file not found: {}", result.relative_path);
+        }
+
+        let connector = self
+            .connectors
+            .get(&result.source_type)
+            .with_context(|| format!("connector {} not found", result.source_type))?;
+        let name = result
+            .relative_path
+            .split('/')
+            .next_back()
+            .unwrap_or(&result.relative_path)
+            .to_string();
+        let entry = crate::connectors::RemoteEntry {
+            id: result.id.clone(),
+            path: result.relative_path.clone(),
+            name,
+            size: 0,
+            modified: None,
+            content_type: None,
+            open_url: result.open_url.clone(),
+        };
+        connector.download(&entry, dest).await
+    }
+
     pub fn app_index_count(&self) -> Result<usize> {
         let index = self
             .app_index

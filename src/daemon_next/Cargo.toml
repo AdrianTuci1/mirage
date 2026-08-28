@@ -40,6 +40,7 @@ aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio"] 
 aws-config = "1"
 pavao = { version = "0.2", optional = true }
 urlencoding = "2"
+notify-debouncer-full = "0.5"
 
 [features]
 default = []

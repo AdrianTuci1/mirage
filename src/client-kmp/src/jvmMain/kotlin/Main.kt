@@ -190,8 +190,25 @@ fun main() = application {
                         onOpenSettings = { isSettingsVisible = true },
                         onAddServer = { isAddServerVisible = true },
                         onSync = { remoteManagers.forEach { it.syncDeltaIndex() } },
-                        onDownloadResult = {
-                            // TODO: implement explicit download-to-Downloads flow.
+                        onDownloadResult = { result ->
+                            val fileName = result.fileName().ifBlank { result.relativePath }
+                            val dest = generateUniqueFile(File(System.getProperty("user.home"), "Downloads"), fileName)
+                            scope.launch {
+                                try {
+                                    daemonClient?.downloadFile(
+                                        DaemonModels.DownloadFileRequest(
+                                            id = result.id,
+                                            relativePath = result.relativePath,
+                                            sourceType = result.sourceType,
+                                            destPath = dest.absolutePath,
+                                            openUrl = result.openUrl
+                                        )
+                                    )
+                                    Desktop.getDesktop().open(dest)
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
                         }
                     )
                 }
@@ -240,5 +257,20 @@ private fun openExternalUrl(url: String) {
         ProcessBuilder(*command).inheritIO().start()
     } catch (e: Exception) {
         e.printStackTrace()
+    }
+}
+
+private fun generateUniqueFile(dir: File, name: String): File {
+    if (!dir.exists()) dir.mkdirs()
+    val base = File(dir, name)
+    if (!base.exists()) return base
+    val dotIndex = name.lastIndexOf('.')
+    val stem = if (dotIndex > 0) name.substring(0, dotIndex) else name
+    val ext = if (dotIndex > 0) name.substring(dotIndex) else ""
+    var index = 1
+    while (true) {
+        val candidate = File(dir, "${stem} (${index})${ext}")
+        if (!candidate.exists()) return candidate
+        index++
     }
 }

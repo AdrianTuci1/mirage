@@ -125,6 +125,23 @@ fn resolve_daemon_exe() -> Option<PathBuf> {
         }
     }
 
+    // Compose Desktop packaged app resources.
+    if let Ok(resources_dir) = std::env::var("compose.application.resources.dir") {
+        let os_dir = if cfg!(target_os = "macos") {
+            "macos"
+        } else if cfg!(target_os = "windows") {
+            "windows"
+        } else {
+            "linux"
+        };
+        let candidate = PathBuf::from(&resources_dir).join(os_dir).join("mirage-daemon");
+        #[cfg(windows)]
+        let candidate = PathBuf::from(&resources_dir).join(os_dir).join("mirage-daemon.exe");
+        if candidate.exists() && is_executable(&candidate) {
+            return Some(candidate);
+        }
+    }
+
     // Sibling binary: mirage-daemon next to the mirage CLI.
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(dir) = current_exe.parent() {

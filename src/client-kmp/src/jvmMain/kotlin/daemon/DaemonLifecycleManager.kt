@@ -108,7 +108,12 @@ class DaemonLifecycleManager(
 
         // Compose Desktop / packaged app resources.
         System.getProperty("compose.application.resources.dir")?.let { dir ->
-            candidates.add(File(dir, "mirage-daemon"))
+            val osDir = when {
+                System.getProperty("os.name").lowercase().contains("mac") -> "macos"
+                System.getProperty("os.name").lowercase().contains("win") -> "windows"
+                else -> "linux"
+            }
+            candidates.add(File(dir, "$osDir/mirage-daemon"))
         }
 
         // Directory of the JVM executable / app bundle.

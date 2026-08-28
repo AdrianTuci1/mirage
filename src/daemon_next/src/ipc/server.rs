@@ -30,6 +30,16 @@ struct SearchRequest {
     hybrid: bool,
 }
 
+#[derive(Debug, Deserialize)]
+struct DownloadRequest {
+    id: String,
+    relative_path: String,
+    source_type: String,
+    dest_path: String,
+    #[serde(default)]
+    open_url: Option<String>,
+}
+
 impl Default for SearchRequest {
     fn default() -> Self {
         Self {
@@ -173,6 +183,41 @@ impl IpcServer {
                         format!("failed to serialize search results: {}", e),
                     )
                 })
+            })
+        });
+
+        let download_search = Arc::clone(&search);
+        server.register("download_file", move |params: Value| {
+            let search = Arc::clone(&download_search);
+            Box::pin(async move {
+                let request: DownloadRequest = serde_json::from_value(params).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                        format!("invalid download_file params: {}", e),
+                    )
+                })?;
+
+                let result = SearchResult {
+                    id: request.id,
+                    relative_path: request.relative_path,
+                    score: 0.0,
+                    source_type: request.source_type,
+                    category: SearchResultCategory::File,
+                    open_url: request.open_url,
+                };
+
+                let dest = PathBuf::from(request.dest_path);
+                search
+                    .download_result(&result, &dest)
+                    .await
+                    .map_err(|e| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            format!("download_file failed: {}", e),
+                        )
+                    })?;
+
+                Ok(json!({ "dest_path": dest.to_string_lossy() }))
             })
         });
 
