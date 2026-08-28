@@ -56,6 +56,7 @@ fun main() = application {
     var indexingProgress by remember { mutableStateOf<Float?>(null) }
     val modules = remember { mutableStateListOf<ModuleStatus>() }
     val connectors = remember { mutableStateListOf<DaemonModels.ConnectorConfig>() }
+    var connectorRefreshTrigger by remember { mutableStateOf(0) }
 
     val socketPath = System.getProperty("user.home") + "/.mirage/mirage.sock"
     val dataDir = System.getProperty("user.home") + "/.mirage/data"
@@ -106,6 +107,17 @@ fun main() = application {
                 // Daemon may still be starting; retry on next poll.
             }
             delay(2000)
+        }
+    }
+
+    LaunchedEffect(daemonClient, connectorRefreshTrigger) {
+        val client = daemonClient ?: return@LaunchedEffect
+        try {
+            val list = client.listConnectors()
+            connectors.clear()
+            connectors.addAll(list)
+        } catch (_: Exception) {
+            // Retry on next trigger.
         }
     }
 
@@ -174,6 +186,7 @@ fun main() = application {
                         modules = modules,
                         indexedCount = indexedCount,
                         indexingProgress = indexingProgress,
+                        connectors = connectors,
                         onStartIndexing = {
                             scope.launch {
                                 try {
@@ -227,6 +240,7 @@ fun main() = application {
                 scope.launch {
                     try {
                         indexedCount = daemonClient?.updateConnectors(updated) ?: 0
+                        connectorRefreshTrigger += 1
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }

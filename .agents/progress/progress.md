@@ -3,8 +3,8 @@
 ## Stare curentă
 
 - **Data ultimei actualizări:** 2026-08-28
-- **Faza curentă:** Local standalone MVP — funcționalități locale implementate; rămân configuratorul de conectori și indicatorul vizual din footer.
-- **Progres general:** ~93% pentru funcționalitatea locală standalone
+- **Faza curentă:** Local standalone MVP — funcționalități locale și indicatorul din footer implementate; rămân refactorurile modulare (DuckDB/ONNX) și testarea packaging.
+- **Progres general:** ~97% pentru funcționalitatea locală standalone
 - **Wizard/onboarding:** exclus momentan; modulele se gestionează direct din Settings sau din indicatorul de stare.
 
 ## Ce funcționează local (finalizat)
@@ -19,14 +19,15 @@
 | File watcher | ✅ | reindexare automată la schimbări în `roots` |
 | Packaging | ✅ | script-uri DMG/MSI/DEB, binare daemon/CLI în `package-resources/` |
 | SLM heuristic | ✅ | routing intenție + scaffold ONNX |
-| Teste Rust | ✅ | unit + integration trec |
+| Teste Rust | ⚠️ | 29 unit tests trec; `ipc_ping` eșuează cu timeout la pornirea daemonului (de investigat) |
 
 ## Ce mai trebuie pentru local running complet
 
 | Task | Prioritate | Note |
 |------|------------|------|
 | Config conectori din UI | ✅ finalizat | Tab Connectors în Settings cu add/edit/delete; salvare prin `update_connectors` |
-| Footer index/module status indicator | 🟡 medie | Design finalizat; implementare vizuală în KMP rămâne pentru următoarea iterație |
+| Footer index/module status indicator | ✅ finalizat | Cerc de progres + procent + cercuri icon surse cu toggle în footer |
+| Refactor DuckDB/ONNX ca module descărcabile | 🟢 scăzută | Funcționează built-in, dar obiectivul final e modular |
 | Refactor DuckDB/ONNX ca module descărcabile | 🟢 scăzută | Funcționează built-in, dar obiectivul final e modular |
 
 ## Ce este exclus momentan
@@ -72,6 +73,7 @@ Daemonul și CLI-ul sunt copiate în `src/client-kmp/package-resources/{macos,wi
 
 ## Commit-uri recente
 
+- (in lucru) — footer indicator cu cerc de progres + filtre surse și RPC `list_connectors`.
 - `3a84d97` — configurator conectori în Settings + fixuri compilare daemon (watcher, PathBuf, Arc connectors).
 - `907ffb9` — packaging scripts, file watcher, explicit cloud download.
 - `df0fa5f` — implementare conectori S3/R2, Dropbox, GDrive, SMB.

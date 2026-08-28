@@ -2,6 +2,7 @@ package mirage.desktop.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
@@ -27,6 +29,8 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -93,6 +97,7 @@ fun SearchScreen(
     modules: List<ModuleStatus> = emptyList(),
     indexedCount: Int = 0,
     indexingProgress: Float? = null,
+    connectors: List<mirage.daemon.DaemonModels.ConnectorConfig> = emptyList(),
     onStartIndexing: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onAddServer: () -> Unit = {},
@@ -101,9 +106,26 @@ fun SearchScreen(
 ) {
     var query by remember { mutableStateOf("") }
     var results by remember(query) { mutableStateOf(emptyList<mirage.search.SearchResult>()) }
-    var selectedIndex by remember(results) { mutableStateOf(0) }
+    var disabledSourceTypes by remember { mutableStateOf(emptySet<String>()) }
+    var selectedIndex by remember(results, disabledSourceTypes) { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
+
+    val sourceTypes = remember(connectors) {
+        buildSet {
+            add("local")
+            add("app")
+            connectors.forEach { add(it.kind.sourceType) }
+        }.toList()
+    }
+
+    val filteredResults = remember(results, disabledSourceTypes) {
+        if (disabledSourceTypes.isEmpty()) {
+            results
+        } else {
+            results.filter { it.sourceType !in disabledSourceTypes }
+        }
+    }
 
     LaunchedEffect(query) {
         results = if (query.isBlank()) emptyList() else search(query)
@@ -115,14 +137,14 @@ fun SearchScreen(
     }
 
     val handleOpenSelected: () -> Unit = {
-        val selected = results.getOrNull(selectedIndex)
+        val selected = filteredResults.getOrNull(selectedIndex)
         if (selected != null) {
             onOpenResult(selected)
         }
     }
 
     val handleDownloadSelected: () -> Unit = {
-        val selected = results.getOrNull(selectedIndex)
+        val selected = filteredResults.getOrNull(selectedIndex)
         if (selected != null) {
             onDownloadResult(selected)
         }
@@ -140,14 +162,14 @@ fun SearchScreen(
                     .onPreviewKeyEvent { event ->
                         when {
                             event.key == Key.DirectionDown && event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown -> {
-                                if (results.isNotEmpty()) {
-                                    selectedIndex = (selectedIndex + 1).coerceAtMost(results.lastIndex)
+                                if (filteredResults.isNotEmpty()) {
+                                    selectedIndex = (selectedIndex + 1).coerceAtMost(filteredResults.lastIndex)
                                 }
                                 true
                             }
 
                             event.key == Key.DirectionUp && event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown -> {
-                                if (results.isNotEmpty()) {
+                                if (filteredResults.isNotEmpty()) {
                                     selectedIndex = (selectedIndex - 1).coerceAtLeast(0)
                                 }
                                 true
@@ -196,16 +218,16 @@ fun SearchScreen(
                     Spacer(modifier = Modifier.height(MirageTokens.spaceMd))
                 }
 
-                if (results.isNotEmpty()) {
+                if (filteredResults.isNotEmpty()) {
                     HorizontalDivider(color = MirageTokens.colorBorder)
                     Spacer(modifier = Modifier.height(MirageTokens.spaceMd))
                 }
 
-                if (query.isNotBlank() && results.isEmpty()) {
+                if (query.isNotBlank() && filteredResults.isEmpty()) {
                     EmptyResults(query = query)
-                } else if (results.isNotEmpty()) {
+                } else if (filteredResults.isNotEmpty()) {
                     ResultsList(
-                        results = results,
+                        results = filteredResults,
                         selectedIndex = selectedIndex,
                         onSelect = { selectedIndex = it },
                         onOpen = handleOpenSelected
@@ -214,14 +236,24 @@ fun SearchScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                if (results.isNotEmpty() || query.isNotBlank()) {
-                    SearchFooter(
-                        onOpenSettings = onOpenSettings,
-                        onOpenSelected = handleOpenSelected,
-                        onDownloadSelected = handleDownloadSelected,
-                        showDownload = results.getOrNull(selectedIndex)?.openUrl?.isNotBlank() == true
-                    )
-                }
+                SearchFooter(
+                    progress = indexingProgress,
+                    indexedCount = indexedCount,
+                    sourceTypes = sourceTypes,
+                    disabledSourceTypes = disabledSourceTypes,
+                    onToggleSource = { sourceType ->
+                        disabledSourceTypes = if (sourceType in disabledSourceTypes) {
+                            disabledSourceTypes - sourceType
+                        } else {
+                            disabledSourceTypes + sourceType
+                        }
+                        selectedIndex = 0
+                    },
+                    onOpenSettings = onOpenSettings,
+                    onOpenSelected = handleOpenSelected,
+                    onDownloadSelected = handleDownloadSelected,
+                    showDownload = filteredResults.getOrNull(selectedIndex)?.openUrl?.isNotBlank() == true
+                )
             }
         }
     }
@@ -556,6 +588,11 @@ private fun EmptyResults(query: String) {
 
 @Composable
 private fun SearchFooter(
+    progress: Float?,
+    indexedCount: Int,
+    sourceTypes: List<String>,
+    disabledSourceTypes: Set<String>,
+    onToggleSource: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSelected: () -> Unit,
     onDownloadSelected: () -> Unit,
@@ -574,16 +611,26 @@ private fun SearchFooter(
                 horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ShortcutHint(label = "open", key = "↵")
-                if (showDownload) {
-                    ShortcutHint(label = "download", key = "shift+↵")
-                }
+                IndexProgressIndicator(
+                    progress = progress,
+                    indexedCount = indexedCount,
+                    onClick = onOpenSettings
+                )
+                SourceTypeFilters(
+                    sourceTypes = sourceTypes,
+                    disabledSourceTypes = disabledSourceTypes,
+                    onToggle = onToggleSource
+                )
             }
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                ShortcutHint(label = "open", key = "↵")
+                if (showDownload) {
+                    ShortcutHint(label = "download", key = "shift+↵")
+                }
                 Text(
                     text = "settings",
                     fontSize = MirageTokens.textFooter,
@@ -605,6 +652,108 @@ private fun SearchFooter(
             }
         }
     }
+}
+
+@Composable
+private fun IndexProgressIndicator(
+    progress: Float?,
+    indexedCount: Int,
+    onClick: () -> Unit
+) {
+    val resolvedProgress = when {
+        progress != null -> progress.coerceIn(0f, 1f)
+        indexedCount > 0 -> 1f
+        else -> 0f
+    }
+    val percent = (resolvedProgress * 100).toInt()
+    val trackColor = MirageTokens.colorBorder
+    val progressColor = when {
+        resolvedProgress <= 0f -> Color(0xFF9CA3AF)
+        resolvedProgress >= 1f -> Color(0xFF22C55E)
+        else -> Color(0xFFEAB308)
+    }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.clickableNoRipple(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier.size(18.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (resolvedProgress >= 1f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(color = progressColor, shape = androidx.compose.foundation.shape.CircleShape)
+                )
+            } else {
+                androidx.compose.material3.CircularProgressIndicator(
+                    progress = { resolvedProgress },
+                    modifier = Modifier.fillMaxSize(),
+                    color = progressColor,
+                    trackColor = trackColor,
+                    strokeWidth = 2.dp
+                )
+            }
+        }
+        Text(
+            text = "$percent%",
+            fontSize = MirageTokens.textFooter,
+            color = MirageTokens.colorTextSecondary
+        )
+    }
+}
+
+@Composable
+private fun SourceTypeFilters(
+    sourceTypes: List<String>,
+    disabledSourceTypes: Set<String>,
+    onToggle: (String) -> Unit
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceXs),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        sourceTypes.forEach { sourceType ->
+            val isActive = sourceType !in disabledSourceTypes
+            val tint = if (isActive) MirageTokens.colorTextPrimary else MirageTokens.colorTextSecondary
+            val bg = if (isActive) MirageTokens.colorSelectedBg else Color.Transparent
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .background(color = bg, shape = androidx.compose.foundation.shape.CircleShape)
+                    .then(
+                        if (!isActive) {
+                            Modifier.border(
+                                width = 1.5.dp,
+                                color = MirageTokens.colorBorder,
+                                shape = androidx.compose.foundation.shape.CircleShape
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .clickableNoRipple { onToggle(sourceType) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = sourceTypeIcon(sourceType),
+                    contentDescription = sourceType,
+                    tint = tint,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun sourceTypeIcon(sourceType: String) = when (sourceType) {
+    "s3" -> Icons.Default.Storage
+    "dropbox", "gdrive" -> Icons.Default.Cloud
+    "app" -> Icons.Default.Description
+    else -> Icons.Default.Folder
 }
 
 @Composable
@@ -640,3 +789,11 @@ private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier =
             onClick = onClick
         )
     )
+
+private val mirage.daemon.DaemonModels.ConnectorKind.sourceType: String
+    get() = when (this) {
+        mirage.daemon.DaemonModels.ConnectorKind.S3 -> "s3"
+        mirage.daemon.DaemonModels.ConnectorKind.DROPBOX -> "dropbox"
+        mirage.daemon.DaemonModels.ConnectorKind.GOOGLE_DRIVE -> "gdrive"
+        mirage.daemon.DaemonModels.ConnectorKind.SMB -> "smb"
+    }

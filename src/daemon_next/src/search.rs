@@ -170,6 +170,31 @@ impl UnifiedSearch {
         Ok(results)
     }
 
+    /// Return the currently configured connector metadata (without credentials).
+    pub fn list_connectors(&self) -> Result<Vec<crate::config::ConnectorConfig>> {
+        let connectors = self
+            .connectors
+            .lock()
+            .map_err(|e| anyhow::anyhow!("failed to lock connectors: {}", e))?
+            .iter()
+            .map(|(id, conn)| crate::config::ConnectorConfig {
+                id: id.to_string(),
+                name: conn.name().to_string(),
+                kind: match conn.source_type() {
+                    "s3" => crate::config::ConnectorKind::S3,
+                    "dropbox" => crate::config::ConnectorKind::Dropbox,
+                    "gdrive" => crate::config::ConnectorKind::GoogleDrive,
+                    "smb" => crate::config::ConnectorKind::Smb,
+                    _ => crate::config::ConnectorKind::S3,
+                },
+                enabled: true,
+                roots: Vec::new(),
+                credentials: crate::config::ConnectorCredentials::default(),
+            })
+            .collect();
+        Ok(connectors)
+    }
+
     pub fn file_index_count(&self) -> Result<usize> {
         let index = self
             .file_index

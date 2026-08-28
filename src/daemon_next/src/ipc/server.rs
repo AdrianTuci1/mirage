@@ -314,6 +314,20 @@ impl IpcServer {
             })
         });
 
+        let list_connectors_search = Arc::clone(&search);
+        server.register("list_connectors", move |_params: Value| {
+            let search = Arc::clone(&list_connectors_search);
+            Box::pin(async move {
+                let connectors = search.list_connectors().map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("list_connectors failed: {}", e),
+                    )
+                })?;
+                Ok(json!({ "connectors": connectors }))
+            })
+        });
+
         let query_analytics = Arc::clone(&analytics);
         server.register("query", move |params: Value| {
             let analytics = Arc::clone(&query_analytics);
