@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use mirage_daemon::{DaemonConfig, ipc::client::IpcClient};
+use mirage_daemon::{DaemonRunner, ipc::client::IpcClient};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -62,105 +62,83 @@ enum ModuleCommand {
     Remove { module_id: String },
 }
 
-fn load_config_path(args: &Args) -> PathBuf {
-    args.config
-        .clone()
-        .unwrap_or_else(|| DaemonConfig::base_dir().join("daemon.yaml"))
-}
-
-#[cfg(unix)]
-fn socket_path(args: &Args) -> Result<PathBuf> {
-    if let Some(path) = args.socket_path.clone() {
-        return Ok(path);
-    }
-    let config_path = load_config_path(args);
-    let config = DaemonConfig::load(&config_path)
-        .with_context(|| format!("failed to load config from {}", config_path.display()))?;
-    Ok(config.socket_path)
-}
-
-#[cfg(windows)]
-fn pipe_name(args: &Args) -> Result<String> {
-    if let Some(name) = args.pipe_name.clone() {
-        return Ok(name);
-    }
-    let config_path = load_config_path(args);
-    let config = DaemonConfig::load(&config_path)
-        .with_context(|| format!("failed to load config from {}", config_path.display()))?;
-    Ok(config.pipe_name)
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
+    let mut runner = DaemonRunner::from_config_path(args.config.clone())?;
 
     match &args.command {
-        Command::Search { query, top_k } => search_command(&args, query, *top_k).await,
-        Command::Query { sql } => query_command(&args, sql).await,
-        Command::Status => status_command(&args).await,
-        Command::Ask { question } => ask_command(&args, question).await,
-        Command::Module(cmd) => module_command(&args, cmd).await,
+        Command::Search { query, top_k } => search_command(&mut runner, query, *top_k).await,
+        Command::Query { sql } => query_command(&mut runner, sql).await,
+        Command::Status => status_command(&mut runner).await,
+        Command::Ask { question } => ask_command(&mut runner, question).await,
+        Command::Module(cmd) => module_command(&mut runner, cmd).await,
     }
 }
 
-async fn search_command(args: &Args, query: &str, top_k: usize) -> Result<()> {
+async fn search_command(runner: &mut DaemonRunner, query: &str, top_k: usize) -> Result<()> {
+    runner.ensure_running().await?;
     let params = json!({ "query": query, "top_k": top_k });
-    let response = ipc_call(args, "search", Some(params)).await?;
+    let response = ipc_call(runner, "search", Some(params)).await?;
     print_response(&response)?;
     Ok(())
 }
 
-async fn query_command(args: &Args, sql: &str) -> Result<()> {
+async fn query_command(runner: &mut DaemonRunner, sql: &str) -> Result<()> {
+    runner.ensure_running().await?;
     let params = json!({ "sql": sql });
-    let response = ipc_call(args, "query", Some(params)).await?;
+    let response = ipc_call(runner, "query", Some(params)).await?;
     print_response(&response)?;
     Ok(())
 }
 
-async fn status_command(args: &Args) -> Result<()> {
-    let response = ipc_call(args, "status", Some(json!({}))).await?;
+async fn status_command(runner: &mut DaemonRunner) -> Result<()> {
+    runner.ensure_running().await?;
+    let response = ipc_call(runner, "status", Some(json!({}))).await?;
     print_response(&response)?;
     Ok(())
 }
 
-async fn ask_command(args: &Args, question: &str) -> Result<()> {
+async fn ask_command(runner: &mut DaemonRunner, question: &str) -> Result<()> {
+    runner.ensure_running().await?;
     let params = json!({ "question": question });
-    let response = ipc_call(args, "ask", Some(params)).await?;
+    let response = ipc_call(runner, "ask", Some(params)).await?;
     print_response(&response)?;
     Ok(())
 }
 
-async fn module_command(args: &Args, cmd: &ModuleCommand) -> Result<()> {
+async fn module_command(runner: &mut DaemonRunner, cmd: &ModuleCommand) -> Result<()> {
+    runner.ensure_running().await?;
     match cmd {
         ModuleCommand::List => {
-            let response = ipc_call(args, "list_modules", Some(json!({}))).await?;
+            let response = ipc_call(runner, "list_modules", Some(json!({}))).await?;
             print_response(&response)?;
         }
         ModuleCommand::Install { module_id, force } => {
             let params = json!({ "module_id": module_id, "force": *force });
-            let response = ipc_call(args, "download_module", Some(params)).await?;
+            let response = ipc_call(runner, "download_module", Some(params)).await?;
             if response.error.is_some() {
                 print_response(&response)?;
                 return Ok(());
             }
             println!("Module '{}' download requested. Tracking progress...", module_id);
-            track_module(args, module_id).await?;
+            track_module(runner, module_id).await?;
         }
         ModuleCommand::Status { module_id } => {
             let params = json!({ "module_id": module_id });
-            let response = ipc_call(args, "module_status", Some(params)).await?;
+            let response = ipc_call(runner, "module_status", Some(params)).await?;
             print_response(&response)?;
         }
         ModuleCommand::Remove { module_id } => {
             let params = json!({ "module_id": module_id });
-            let response = ipc_call(args, "remove_module", Some(params)).await?;
+            let response = ipc_call(runner, "remove_module", Some(params)).await?;
             print_response(&response)?;
         }
     }
     Ok(())
 }
 
-async fn track_module(args: &Args, module_id: &str) -> Result<()> {
+async fn track_module(runner: &mut DaemonRunner, module_id: &str) -> Result<()> {
     let params = json!({ "module_id": module_id });
     let start = std::time::Instant::now();
     let timeout = Duration::from_secs(300);
@@ -171,7 +149,7 @@ async fn track_module(args: &Args, module_id: &str) -> Result<()> {
         }
 
         tokio::time::sleep(Duration::from_millis(500)).await;
-        let response = ipc_call(args, "module_status", Some(params.clone())).await?;
+        let response = ipc_call(runner, "module_status", Some(params.clone())).await?;
 
         if let Some(error) = &response.error {
             println!("Error: {}", error.message);
@@ -239,18 +217,18 @@ async fn track_module(args: &Args, module_id: &str) -> Result<()> {
     }
 }
 
-async fn ipc_call(args: &Args, method: &str, params: Option<Value>) -> Result<mirage_daemon::ipc::protocol::JsonRpcResponse> {
+async fn ipc_call(runner: &mut DaemonRunner, method: &str, params: Option<Value>) -> Result<mirage_daemon::ipc::protocol::JsonRpcResponse> {
     #[cfg(unix)]
     {
-        let path = socket_path(args)?;
-        IpcClient::call(&path, method, params)
+        let path = runner.endpoint();
+        IpcClient::call(path, method, params)
             .await
             .with_context(|| format!("failed to call {} via {}", method, path.display()))
     }
     #[cfg(windows)]
     {
-        let name = pipe_name(args)?;
-        IpcClient::call(&name, method, params)
+        let name = runner.endpoint();
+        IpcClient::call(name, method, params)
             .await
             .with_context(|| format!("failed to call {} via {}", method, name))
     }

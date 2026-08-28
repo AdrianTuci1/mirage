@@ -10,6 +10,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -30,6 +32,7 @@ import mirage.desktop.ui.SearchScreen
 import mirage.desktop.ui.SettingsWindow
 import mirage.desktop.ui.theme.MirageTheme
 import mirage.daemon.DaemonClient
+import mirage.daemon.DaemonModels
 import mirage.search.InMemoryVectorStore
 import mirage.search.SearchEngine
 import mirage.search.SearchResultCategory
@@ -50,6 +53,7 @@ fun main() = application {
 
     var indexedCount by remember { mutableStateOf(0) }
     var indexingProgress by remember { mutableStateOf<Float?>(null) }
+    val modules = remember { mutableStateListOf<ModuleStatus>() }
 
     val socketPath = System.getProperty("user.home") + "/.mirage/mirage.sock"
     val dataDir = System.getProperty("user.home") + "/.mirage/data"
@@ -69,6 +73,38 @@ fun main() = application {
 
     LaunchedEffect(Unit) {
         daemonClient = lifecycleManager.ensureRunning()
+    }
+
+    LaunchedEffect(daemonClient) {
+        val client = daemonClient ?: return@LaunchedEffect
+        while (isActive) {
+            try {
+                val status = client.status()
+                val detailed = client.listModules()
+                val map = linkedMapOf<String, ModuleStatus>()
+                fun put(id: String, label: String, ready: Boolean, progress: Float?) {
+                    map[id] = ModuleStatus(id, label, ready, progress)
+                }
+                put("vector", "Vector", status.modules.vector, null)
+                put("text", "Text", status.modules.text, null)
+                put("tabular", "Tabular", status.modules.tabular, null)
+                for (m in detailed) {
+                    val progress = if (m.bytesTotal > 0) {
+                        m.bytesDownloaded.toFloat() / m.bytesTotal.toFloat()
+                    } else null
+                    val ready = m.state == DaemonModels.ModuleState.READY && m.dependenciesReady
+                    val label = m.moduleId
+                        .replace("_", " ")
+                        .replaceFirstChar { it.uppercase() }
+                    put(m.moduleId, label, ready, progress)
+                }
+                modules.clear()
+                modules.addAll(map.values)
+            } catch (_: Exception) {
+                // Daemon may still be starting; retry on next poll.
+            }
+            delay(2000)
+        }
     }
 
     // Global hotkey toggles the floating search window (Ctrl/Cmd + Space).
@@ -148,7 +184,7 @@ fun main() = application {
                                 }
                             }
                         },
-                        modules = emptyList(),
+                        modules = modules,
                         indexedCount = indexedCount,
                         indexingProgress = indexingProgress,
                         onStartIndexing = {

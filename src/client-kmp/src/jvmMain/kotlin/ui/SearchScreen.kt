@@ -168,7 +168,7 @@ fun SearchScreen(
 
                 IndexingStatus(
                     progress = indexingProgress,
-                    indexedCount = searchEngine.indexedCount,
+                    indexedCount = indexedCount,
                     onStartIndexing = onStartIndexing
                 )
 

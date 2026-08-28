@@ -83,6 +83,22 @@ class DaemonClient(
         json.decodeFromJsonElement(DaemonModels.DaemonStatus.serializer(), response)
     }
 
+    suspend fun listModules(): List<DaemonModels.DaemonModuleStatus> = withContext(Dispatchers.IO) {
+        val response = call("list_modules", null)
+        json.decodeFromJsonElement(ListSerializer(DaemonModels.DaemonModuleStatus.serializer()), response)
+    }
+
+    suspend fun moduleStatus(moduleId: String): DaemonModels.DaemonModuleStatus = withContext(Dispatchers.IO) {
+        val params = json.encodeToJsonElement(DaemonModels.ModuleIdRequest.serializer(), DaemonModels.ModuleIdRequest(moduleId))
+        val response = call("module_status", params)
+        json.decodeFromJsonElement(DaemonModels.DaemonModuleStatus.serializer(), response)
+    }
+
+    suspend fun downloadModule(moduleId: String): Unit = withContext(Dispatchers.IO) {
+        val params = json.encodeToJsonElement(DaemonModels.ModuleIdRequest.serializer(), DaemonModels.ModuleIdRequest(moduleId))
+        call("download_module", params)
+    }
+
     private fun call(method: String, params: JsonElement?): JsonElement {
         val request = JsonRpcRequest(
             id = nextId.getAndIncrement(),
