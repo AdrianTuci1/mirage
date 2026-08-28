@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use mirage_daemon::{logging, Analytics, create_embedder, DaemonConfig, FileWatcher, IpcServer, LanceDbStore, ModuleManager, UnifiedSearch};
+use mirage_daemon::{logging, Analytics, create_embedder, DaemonConfig, FileWatcher, HeuristicSlmEngine, IpcServer, LanceDbStore, ModuleManager, UnifiedSearch};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -87,9 +87,23 @@ async fn main() -> Result<()> {
 
     let store = Arc::new(LanceDbStore::open(&config).await.context("failed to open LanceDB store")?);
     let embedder = create_embedder(&config.models_dir).context("failed to initialize embedder")?;
-    let analytics = Arc::new(Analytics::open(&config).context("failed to open DuckDB analytics")?);
+    let analytics = Arc::new(Analytics::open(&config).context("failed to open analytics")?);
     let module_manager = Arc::new(ModuleManager::new(&config, None).await);
-    let slm: Arc<dyn mirage_daemon::SlmEngine> = Arc::new(mirage_daemon::HeuristicSlmEngine::new(10));
+
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "onnx")] {
+            use mirage_daemon::OnnxSlmEngine;
+            let slm: Arc<dyn mirage_daemon::SlmEngine> = match OnnxSlmEngine::new(&config.models_dir) {
+                Ok(engine) => Arc::new(engine.with_top_k(10)),
+                Err(e) => {
+                    tracing::warn!("ONNX SLM not available: {}. Using heuristic fallback.", e);
+                    Arc::new(HeuristicSlmEngine::new(10))
+                }
+            };
+        } else {
+            let slm: Arc<dyn mirage_daemon::SlmEngine> = Arc::new(HeuristicSlmEngine::new(10));
+        }
+    }
     let connectors = mirage_daemon::connectors::registry_from_config(&config.connectors);
     let unified_search = Arc::new(UnifiedSearch::new(
         Arc::clone(&store),

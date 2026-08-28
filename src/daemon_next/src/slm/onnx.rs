@@ -209,13 +209,13 @@ impl T5Inference {
             .lock()
             .map_err(|e| anyhow!("failed to lock encoder session: {}", e))?;
 
-        let mut inputs: HashMap<String, Value> = HashMap::new();
+        let mut inputs: Vec<(String, Value)> = Vec::new();
         for input in encoder.inputs() {
             let name = input.name();
             if name == "input_ids" {
-                inputs.insert(name.to_string(), input_ids_tensor.clone().into());
+                inputs.push((name.to_string(), input_ids_tensor.clone().into()));
             } else if name == "attention_mask" {
-                inputs.insert(name.to_string(), attention_mask_tensor.clone().into());
+                inputs.push((name.to_string(), attention_mask_tensor.clone().into()));
             }
         }
 
@@ -260,20 +260,20 @@ impl T5Inference {
             .lock()
             .map_err(|e| anyhow!("failed to lock decoder session: {}", e))?;
 
-        let mut inputs: HashMap<String, Value> = HashMap::new();
+        let mut inputs: Vec<(String, Value)> = Vec::new();
         for input in decoder.inputs() {
             let name = input.name();
             if name == "input_ids" || name == "decoder_input_ids" {
-                inputs.insert(name.to_string(), decoder_ids_tensor.clone().into());
+                inputs.push((name.to_string(), decoder_ids_tensor.clone().into()));
             } else if name == "attention_mask" || name == "decoder_attention_mask" {
-                inputs.insert(name.to_string(), decoder_mask_tensor.clone().into());
+                inputs.push((name.to_string(), decoder_mask_tensor.clone().into()));
             } else if name == "encoder_attention_mask" || name == "encoder_mask" {
-                inputs.insert(name.to_string(), encoder_mask_tensor.clone().into());
+                inputs.push((name.to_string(), encoder_mask_tensor.clone().into()));
             } else if name == "encoder_hidden_states"
                 || name == "encoder_outputs"
                 || name == "hidden_states"
             {
-                inputs.insert(name.to_string(), hidden_tensor.clone().into());
+                inputs.push((name.to_string(), hidden_tensor.clone().into()));
             }
         }
 

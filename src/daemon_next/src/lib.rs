@@ -23,5 +23,10 @@ pub use db::LanceDbStore;
 pub use embeddings::{create_embedder, Embedder};
 pub use ipc::IpcServer;
 pub use modules::{ModuleEvent, ModuleManager, ModuleStatus};
-pub use slm::{AskResponse, HeuristicSlmEngine, OnnxSlmEngine, SlmEngine};
+pub use slm::{AskResponse, HeuristicSlmEngine, SlmEngine};
+cfg_if::cfg_if! {
+    if #[cfg(feature = "onnx")] {
+        pub use slm::OnnxSlmEngine;
+    }
+}
 pub use watcher::FileWatcher;

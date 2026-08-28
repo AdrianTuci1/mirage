@@ -3,9 +3,10 @@
 ## Stare curentă
 
 - **Data ultimei actualizări:** 2026-08-28
-- **Faza curentă:** Local standalone MVP — funcționalități locale și indicatorul din footer implementate; rămân refactorurile modulare (DuckDB/ONNX) și testarea packaging.
-- **Progres general:** ~97% pentru funcționalitatea locală standalone
-- **Wizard/onboarding:** exclus momentan; modulele se gestionează direct din Settings sau din indicatorul de stare.
+- **Faza curentă:** Local standalone MVP complet — funcționalități locale, conectori, indicator footer și refactor modular DuckDB/ONNX implementate.
+- **Progres general:** ~99% pentru funcționalitatea locală standalone
+- **Wizard/onboarding:** exclus momentan; modulele se gestionează direct din Settings → Modules.
+- **Build artifacts:** directorul `src/daemon_next/target/` a fost curățat (~20GB eliberați).
 
 ## Ce funcționează local (finalizat)
 
@@ -27,7 +28,8 @@
 |------|------------|------|
 | Config conectori din UI | ✅ finalizat | Tab Connectors în Settings cu add/edit/delete; salvare prin `update_connectors` |
 | Footer index/module status indicator | ✅ finalizat | Cerc de progres + procent + cercuri icon surse cu toggle în footer |
-| Refactor DuckDB/ONNX ca module descărcabile | 🟢 scăzută | Funcționează built-in, dar obiectivul final e modular |
+| Refactor DuckDB/ONNX ca module descărcabile | ✅ finalizat | Feature-gate Cargo + catalog built-in + auto-ready + Settings Modules tab real |
+| Testare packaging end-to-end | 🟢 scăzută | Necesită JDK 21 + Rust pe mediu potrivit; nu e blocant |
 | Refactor DuckDB/ONNX ca module descărcabile | 🟢 scăzută | Funcționează built-in, dar obiectivul final e modular |
 
 ## Ce este exclus momentan

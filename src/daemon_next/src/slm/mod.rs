@@ -7,10 +7,15 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 pub mod heuristic;
-pub mod onnx;
 
 pub use heuristic::HeuristicSlmEngine;
-pub use onnx::OnnxSlmEngine;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "onnx")] {
+        pub mod onnx;
+        pub use onnx::OnnxSlmEngine;
+    }
+}
 
 /// Response produced by the SLM for a natural-language question.
 #[derive(Debug, Clone, Serialize, Deserialize)]

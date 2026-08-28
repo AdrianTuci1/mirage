@@ -68,6 +68,9 @@ fun SettingsWindow(
     servers: List<ServerConnection> = emptyList(),
     connectors: List<DaemonModels.ConnectorConfig> = emptyList(),
     onConnectorsChange: (List<DaemonModels.ConnectorConfig>) -> Unit = {},
+    modules: List<mirage.desktop.ui.ModuleStatus> = emptyList(),
+    onDownloadModule: (String) -> Unit = {},
+    onCancelModule: (String) -> Unit = {},
     onAddServer: () -> Unit = {},
     onClose: () -> Unit,
     onQuit: () -> Unit
@@ -96,7 +99,11 @@ fun SettingsWindow(
 
                 when (selectedTab) {
                     SettingsTab.General -> GeneralTab(onQuit = onQuit)
-                    SettingsTab.Modules -> ModulesTab()
+                    SettingsTab.Modules -> ModulesTab(
+                        modules = modules,
+                        onDownloadModule = onDownloadModule,
+                        onCancelModule = onCancelModule
+                    )
                     SettingsTab.Connectors -> ConnectorsTab(
                         connectors = connectors,
                         onConnectorsChange = onConnectorsChange
@@ -201,28 +208,41 @@ private fun GeneralTab(onQuit: () -> Unit) {
 }
 
 @Composable
-private fun ModulesTab() {
+private fun ModulesTab(
+    modules: List<mirage.desktop.ui.ModuleStatus> = emptyList(),
+    onDownloadModule: (String) -> Unit = {},
+    onCancelModule: (String) -> Unit = {}
+) {
     Column(
         verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd)
     ) {
-        ModuleDownloadRow(
-            name = "ONNX Runtime",
-            status = "Ready",
-            progress = null
-        )
-        HorizontalDivider(color = MirageTokens.colorBorder)
-        ModuleDownloadRow(
-            name = "SLM router",
-            status = "Downloading...",
-            progress = 0.34f
-        )
-        HorizontalDivider(color = MirageTokens.colorBorder)
-        ModuleDownloadRow(
-            name = "DuckDB",
-            status = "Ready",
-            progress = null
-        )
+        if (modules.isEmpty()) {
+            Text(
+                text = "No modules available.",
+                fontSize = MirageTokens.textSettingDesc,
+                color = MirageTokens.colorTextSecondary
+            )
+        } else {
+            modules.forEachIndexed { index, module ->
+                ModuleDownloadRow(
+                    name = module.label,
+                    status = module.statusLabel(),
+                    progress = module.progress,
+                    onClick = { onDownloadModule(module.id) },
+                    onCancel = { onCancelModule(module.id) }
+                )
+                if (index < modules.lastIndex) {
+                    HorizontalDivider(color = MirageTokens.colorBorder)
+                }
+            }
+        }
     }
+}
+
+private fun ModuleStatus.statusLabel(): String = when {
+    ready -> "Ready"
+    progress != null -> "Downloading..."
+    else -> "Not installed"
 }
 
 @Composable
@@ -774,7 +794,9 @@ private fun SettingActionRow(
 private fun ModuleDownloadRow(
     name: String,
     status: String,
-    progress: Float?
+    progress: Float?,
+    onClick: () -> Unit = {},
+    onCancel: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -791,11 +813,37 @@ private fun ModuleDownloadRow(
                 fontWeight = FontWeight.Medium,
                 color = MirageTokens.colorTextPrimary
             )
-            Text(
-                text = status,
-                fontSize = MirageTokens.textSettingDesc,
-                color = if (status == "Ready") MirageTokens.colorTextPrimary else MirageTokens.colorTextSecondary
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = status,
+                    fontSize = MirageTokens.textSettingDesc,
+                    color = if (status == "Ready") MirageTokens.colorTextPrimary else MirageTokens.colorTextSecondary
+                )
+                if (status == "Not installed") {
+                    Box(
+                        modifier = Modifier
+                            .background(color = MirageTokens.colorSelectedBgStrong, shape = RoundedCornerShape(MirageTokens.radiusSm))
+                            .clickable(onClick = onClick)
+                            .padding(horizontal = MirageTokens.spaceSm, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "Download",
+                            fontSize = MirageTokens.textSettingDesc,
+                            color = MirageTokens.colorTextPrimary
+                        )
+                    }
+                } else if (status == "Downloading...") {
+                    Text(
+                        text = "Cancel",
+                        fontSize = MirageTokens.textSettingDesc,
+                        color = MirageTokens.colorTextSecondary,
+                        modifier = Modifier.clickable(onClick = onCancel)
+                    )
+                }
+            }
         }
         progress?.let {
             androidx.compose.material3.LinearProgressIndicator(

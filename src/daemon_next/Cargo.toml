@@ -20,8 +20,8 @@ arrow-schema = "58"
 arrow-cast = "58"
 arrow-buffer = "58"
 futures = { version = "0.3", features = ["std"] }
-ort = "2.0.0-rc.13"
-duckdb = { version = "1", features = ["bundled"] }
+ort = { version = "2.0.0-rc.13", default-features = false, optional = true }
+duckdb = { version = "1", features = ["bundled", "serde_json"], optional = true }
 sha2 = "0.10"
 rand = "0.8"
 rand_distr = "0.4"
@@ -43,7 +43,9 @@ urlencoding = "2"
 notify-debouncer-full = "0.5"
 
 [features]
-default = []
+default = ["duckdb", "onnx"]
+duckdb = ["dep:duckdb"]
+onnx = ["dep:ort", "ort/std", "ort/ndarray", "ort/tracing", "ort/download-binaries", "ort/copy-dylibs", "ort/tls-rustls", "ort/api-27"]
 smb = ["dep:pavao"]
 
 [dev-dependencies]

@@ -78,13 +78,26 @@ impl ModuleManager {
             .expect("failed to build HTTP client");
 
         let state = load_module_state(&downloads_dir);
-        let catalog = load_cached_catalog(&downloads_dir);
+        let cached_catalog = load_cached_catalog(&downloads_dir);
+        let default_catalog = crate::modules::catalog::default_catalog();
+
+        let merged_catalog = if let Some(cached) = cached_catalog {
+            let mut merged = default_catalog;
+            for module in cached.modules {
+                if merged.find_module(&module.id).is_none() {
+                    merged.modules.push(module);
+                }
+            }
+            Some(merged)
+        } else {
+            Some(default_catalog)
+        };
 
         let (download_cmd, progress_rx) = spawn_download_worker(client.clone());
 
         let (events, _) = broadcast::channel(256);
 
-        let catalog_for_sync = catalog.clone();
+        let catalog_for_sync = merged_catalog.clone();
 
         let inner = Arc::new(Inner {
             downloads_dir,
@@ -93,14 +106,42 @@ impl ModuleManager {
             public_key,
             client,
             state: RwLock::new(state),
-            catalog: RwLock::new(catalog),
+            catalog: RwLock::new(merged_catalog),
             active_downloads: RwLock::new(BTreeMap::new()),
             events,
             download_cmd,
         });
 
-        if let Some(catalog) = catalog_for_sync {
-            Arc::clone(&inner).sync_catalog_to_state(&catalog).await;
+        if let Some(ref catalog) = catalog_for_sync {
+            Arc::clone(&inner).sync_catalog_to_state(catalog).await;
+
+            #[cfg(feature = "duckdb")]
+            if let Some(manifest) = catalog.find_module("duckdb") {
+                inner
+                    .set_state(
+                        "duckdb",
+                        ModuleState::Ready,
+                        Some(manifest.version.clone()),
+                        0,
+                        0,
+                        None,
+                    )
+                    .await;
+            }
+
+            #[cfg(feature = "onnx")]
+            if let Some(manifest) = catalog.find_module("onnx_runtime") {
+                inner
+                    .set_state(
+                        "onnx_runtime",
+                        ModuleState::Ready,
+                        Some(manifest.version.clone()),
+                        0,
+                        0,
+                        None,
+                    )
+                    .await;
+            }
         }
 
         let progress_handle = tokio::spawn(process_progress(Arc::clone(&inner), progress_rx));
@@ -772,8 +813,14 @@ mod tests {
 
         let manager = ModuleManager::new(&config, None).await;
         let modules = manager.list_modules().await;
-        assert_eq!(modules.len(), 1);
-        assert_eq!(modules[0].module_id, "onnx_runtime");
-        assert_eq!(modules[0].state, ModuleState::Missing);
+        let ids: Vec<_> = modules.iter().map(|m| m.module_id.as_str()).collect();
+        assert!(ids.contains(&"onnx_runtime"), "built-in onnx_runtime should appear");
+        assert!(ids.contains(&"duckdb"), "built-in duckdb should appear");
+
+        let onnx = modules.iter().find(|m| m.module_id == "onnx_runtime").unwrap();
+        #[cfg(feature = "onnx")]
+        assert_eq!(onnx.state, ModuleState::Ready, "onnx_runtime should be ready when feature enabled");
+        #[cfg(not(feature = "onnx"))]
+        assert_eq!(onnx.state, ModuleState::Missing, "onnx_runtime should be missing when feature disabled");
     }
 }

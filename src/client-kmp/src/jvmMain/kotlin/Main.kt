@@ -246,6 +246,25 @@ fun main() = application {
                     }
                 }
             },
+            modules = modules,
+            onDownloadModule = { moduleId ->
+                scope.launch {
+                    try {
+                        daemonClient?.downloadModule(moduleId)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            },
+            onCancelModule = { moduleId ->
+                scope.launch {
+                    try {
+                        daemonClient?.downloadModule(moduleId)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            },
             onAddServer = { isAddServerVisible = true },
             onClose = { isSettingsVisible = false },
             onQuit = ::exitApplication
