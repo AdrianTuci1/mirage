@@ -50,7 +50,9 @@ pub trait CloudConnector: Send + Sync {
 pub fn build_connector(config: &ConnectorConfig) -> Result<Box<dyn CloudConnector>> {
     match config.kind {
         #[cfg(feature = "smb")]
-        crate::config::ConnectorKind::Smb => Ok(Box::new(crate::connectors::smb::SmbConnector::new(config)?)),
+        crate::config::ConnectorKind::Smb => {
+            Ok(Box::new(crate::connectors::smb::SmbConnector::new(config)?))
+        }
         crate::config::ConnectorKind::S3 => {
             // S3 connector construction is async because the AWS SDK loads credentials.
             // We run it on the current runtime or build synchronously if no runtime is present.
@@ -62,10 +64,16 @@ pub fn build_connector(config: &ConnectorConfig) -> Result<Box<dyn CloudConnecto
             };
             Ok(Box::new(connector))
         }
-        crate::config::ConnectorKind::Dropbox => Ok(Box::new(crate::connectors::dropbox::DropboxConnector::new(config)?)),
-        crate::config::ConnectorKind::GoogleDrive => Ok(Box::new(crate::connectors::gdrive::GDriveConnector::new(config)?)),
+        crate::config::ConnectorKind::Dropbox => Ok(Box::new(
+            crate::connectors::dropbox::DropboxConnector::new(config)?,
+        )),
+        crate::config::ConnectorKind::GoogleDrive => Ok(Box::new(
+            crate::connectors::gdrive::GDriveConnector::new(config)?,
+        )),
         #[cfg(not(feature = "smb"))]
-        crate::config::ConnectorKind::Smb => anyhow::bail!("SMB connector requires the 'smb' feature flag"),
+        crate::config::ConnectorKind::Smb => {
+            anyhow::bail!("SMB connector requires the 'smb' feature flag")
+        }
     }
 }
 

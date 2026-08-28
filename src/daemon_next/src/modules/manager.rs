@@ -193,8 +193,8 @@ impl ModuleManager {
             tracing::warn!("no public key configured; skipping catalog signature verification");
         }
 
-        let catalog: Catalog = serde_json::from_slice(&bytes)
-            .with_context(|| "failed to parse catalog JSON")?;
+        let catalog: Catalog =
+            serde_json::from_slice(&bytes).with_context(|| "failed to parse catalog JSON")?;
 
         save_cached_catalog(&self.inner.downloads_dir, &bytes)?;
 
@@ -243,10 +243,12 @@ impl ModuleManager {
         self.ensure_dependencies(&manifest).await?;
 
         let final_dir = self.module_install_dir(&manifest);
-        let extract_tmp = self
-            .inner
-            .downloads_dir
-            .join(format!(".tmp.{}.{}.{}", manifest.id, manifest.version, uuid::Uuid::new_v4()));
+        let extract_tmp = self.inner.downloads_dir.join(format!(
+            ".tmp.{}.{}.{}",
+            manifest.id,
+            manifest.version,
+            uuid::Uuid::new_v4()
+        ));
         let part_path = self
             .inner
             .downloads_dir
@@ -370,7 +372,10 @@ impl ModuleManager {
 
     pub async fn is_ready(&self, module_id: &str) -> bool {
         let state = self.inner.state.read().await;
-        state.get(module_id).map(|s| s.state == ModuleState::Ready).unwrap_or(false)
+        state
+            .get(module_id)
+            .map(|s| s.state == ModuleState::Ready)
+            .unwrap_or(false)
     }
 
     async fn require_catalog(&self) -> Result<Catalog> {
@@ -385,7 +390,8 @@ impl ModuleManager {
 
     async fn ensure_dependencies(&self, manifest: &ModuleManifest) -> Result<()> {
         let mut visited = HashSet::new();
-        self.ensure_dependencies_recursive(manifest, &mut visited).await
+        self.ensure_dependencies_recursive(manifest, &mut visited)
+            .await
     }
 
     async fn ensure_dependencies_recursive(
@@ -451,7 +457,6 @@ impl ModuleManager {
             dependencies_ready,
         })
     }
-
 }
 
 impl Inner {
@@ -567,8 +572,7 @@ impl Inner {
                     .with_context(|| format!("failed to remove old {}", final_dir.display()))?;
             }
             if let Some(parent) = final_dir.parent() {
-                fs::create_dir_all(parent)
-                    .context("failed to create module parent directory")?;
+                fs::create_dir_all(parent).context("failed to create module parent directory")?;
             }
 
             #[cfg(unix)]
@@ -639,7 +643,11 @@ async fn process_progress(inner: Arc<Inner>, mut progress_rx: mpsc::Receiver<Dow
             }
         } else {
             inner
-                .update_progress(&progress.module_id, progress.bytes_downloaded, progress.bytes_total)
+                .update_progress(
+                    &progress.module_id,
+                    progress.bytes_downloaded,
+                    progress.bytes_total,
+                )
                 .await;
         }
     }
@@ -802,7 +810,11 @@ mod tests {
                 }
             ]
         });
-        std::fs::write(config.downloads_dir.join("catalog.json"), catalog.to_string()).unwrap();
+        std::fs::write(
+            config.downloads_dir.join("catalog.json"),
+            catalog.to_string(),
+        )
+        .unwrap();
 
         let bytes = std::fs::read_to_string(config.downloads_dir.join("catalog.json")).unwrap();
         let parsed: Catalog = serde_json::from_str(&bytes).expect("catalog should parse");
@@ -814,13 +826,27 @@ mod tests {
         let manager = ModuleManager::new(&config, None).await;
         let modules = manager.list_modules().await;
         let ids: Vec<_> = modules.iter().map(|m| m.module_id.as_str()).collect();
-        assert!(ids.contains(&"onnx_runtime"), "built-in onnx_runtime should appear");
+        assert!(
+            ids.contains(&"onnx_runtime"),
+            "built-in onnx_runtime should appear"
+        );
         assert!(ids.contains(&"duckdb"), "built-in duckdb should appear");
 
-        let onnx = modules.iter().find(|m| m.module_id == "onnx_runtime").unwrap();
+        let onnx = modules
+            .iter()
+            .find(|m| m.module_id == "onnx_runtime")
+            .unwrap();
         #[cfg(feature = "onnx")]
-        assert_eq!(onnx.state, ModuleState::Ready, "onnx_runtime should be ready when feature enabled");
+        assert_eq!(
+            onnx.state,
+            ModuleState::Ready,
+            "onnx_runtime should be ready when feature enabled"
+        );
         #[cfg(not(feature = "onnx"))]
-        assert_eq!(onnx.state, ModuleState::Missing, "onnx_runtime should be missing when feature disabled");
+        assert_eq!(
+            onnx.state,
+            ModuleState::Missing,
+            "onnx_runtime should be missing when feature disabled"
+        );
     }
 }

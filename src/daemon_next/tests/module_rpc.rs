@@ -123,7 +123,11 @@ async fn list_modules_returns_cached_catalog() {
     .await
     .expect("failed to call list_modules");
 
-    assert_eq!(result.error, None, "list_modules returned error: {:?}", result.error);
+    assert_eq!(
+        result.error, None,
+        "list_modules returned error: {:?}",
+        result.error
+    );
     let modules = result
         .result
         .expect("missing list_modules result")
@@ -184,7 +188,11 @@ async fn ask_uses_heuristic_slm_without_onnx_model() {
     .await
     .expect("failed to call ask");
 
-    assert_eq!(result.error, None, "ask should not fail: {:?}", result.error);
+    assert_eq!(
+        result.error, None,
+        "ask should not fail: {:?}",
+        result.error
+    );
     let response = result.result.expect("missing ask result");
     assert_eq!(response["type"], "semantic_search");
     assert!(response["results"].is_array());

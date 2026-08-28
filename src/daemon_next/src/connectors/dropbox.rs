@@ -183,7 +183,10 @@ impl CloudConnector for DropboxConnector {
             .send()
             .await?;
         if !response.status().is_success() {
-            anyhow::bail!("Dropbox download failed: {}", response.text().await.unwrap_or_default());
+            anyhow::bail!(
+                "Dropbox download failed: {}",
+                response.text().await.unwrap_or_default()
+            );
         }
         let bytes = response.bytes().await?;
         tokio::fs::write(dest, bytes).await?;

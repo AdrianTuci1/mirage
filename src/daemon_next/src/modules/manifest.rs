@@ -21,7 +21,9 @@ impl ModuleManifest {
     /// Falls back to a `universal` entry if no host-specific platform is present.
     pub fn platform_for_current_target(&self) -> Option<&PlatformEntry> {
         let host = current_platform_key();
-        self.platforms.get(&host).or_else(|| self.platforms.get("universal"))
+        self.platforms
+            .get(&host)
+            .or_else(|| self.platforms.get("universal"))
     }
 }
 

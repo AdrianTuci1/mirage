@@ -78,7 +78,10 @@ struct CurrentJob {
 #[allow(unused_assignments)]
 pub fn spawn_download_worker(
     client: reqwest::Client,
-) -> (mpsc::UnboundedSender<DownloadCommand>, mpsc::Receiver<DownloadProgress>) {
+) -> (
+    mpsc::UnboundedSender<DownloadCommand>,
+    mpsc::Receiver<DownloadProgress>,
+) {
     let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<DownloadCommand>();
     let (progress_tx, progress_rx) = mpsc::channel::<DownloadProgress>(256);
 
@@ -131,7 +134,11 @@ pub fn spawn_download_worker(
 
                         let progress = match result {
                             Ok(()) => DownloadProgress::done(module_id.clone()),
-                            Err(e) => DownloadProgress::failed(module_id.clone(), e.to_string(), expected_size),
+                            Err(e) => DownloadProgress::failed(
+                                module_id.clone(),
+                                e.to_string(),
+                                expected_size,
+                            ),
                         };
                         let _ = progress_tx.send(progress);
                     });
@@ -169,9 +176,7 @@ async fn download_with_resume(
     progress_tx: mpsc::Sender<DownloadProgress>,
 ) -> Result<()> {
     let existing_offset = if part_path.exists() {
-        fs::metadata(part_path)
-            .map(|m| m.len())
-            .unwrap_or(0)
+        fs::metadata(part_path).map(|m| m.len()).unwrap_or(0)
     } else {
         0
     };
@@ -231,9 +236,7 @@ async fn download_with_resume(
     let _ = progress_task.abort();
     drop(file);
 
-    let final_size = fs::metadata(part_path)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let final_size = fs::metadata(part_path).map(|m| m.len()).unwrap_or(0);
     if final_size != expected_size {
         tracing::warn!(
             "downloaded size {} does not match expected size {}",

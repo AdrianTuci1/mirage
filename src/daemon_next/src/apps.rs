@@ -51,10 +51,7 @@ impl AppIndex {
 
         for (idx, entry) in self.apps.iter().enumerate() {
             for token in path_tokens(&entry.name) {
-                self.name_to_indices
-                    .entry(token)
-                    .or_default()
-                    .push(idx);
+                self.name_to_indices.entry(token).or_default().push(idx);
             }
         }
     }
@@ -95,10 +92,22 @@ impl AppIndex {
     fn scan_windows(&mut self) {
         let mut roots = Vec::new();
         if let Some(program_data) = std::env::var_os("ProgramData") {
-            roots.push(PathBuf::from(program_data).join("Microsoft").join("Windows").join("Start Menu").join("Programs"));
+            roots.push(
+                PathBuf::from(program_data)
+                    .join("Microsoft")
+                    .join("Windows")
+                    .join("Start Menu")
+                    .join("Programs"),
+            );
         }
         if let Some(app_data) = std::env::var_os("APPDATA") {
-            roots.push(PathBuf::from(app_data).join("Microsoft").join("Windows").join("Start Menu").join("Programs"));
+            roots.push(
+                PathBuf::from(app_data)
+                    .join("Microsoft")
+                    .join("Windows")
+                    .join("Start Menu")
+                    .join("Programs"),
+            );
         }
         for root in roots {
             self.collect_windows_shortcuts(&root);
@@ -107,12 +116,19 @@ impl AppIndex {
 
     #[cfg(target_os = "windows")]
     fn collect_windows_shortcuts(&mut self, dir: &Path) {
-        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
                 self.collect_windows_shortcuts(&path);
-            } else if path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()) == Some("lnk".to_string()) {
+            } else if path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.to_lowercase())
+                == Some("lnk".to_string())
+            {
                 let name = path
                     .file_stem()
                     .map(|s| s.to_string_lossy().to_string())
@@ -178,8 +194,14 @@ impl AppIndex {
                     Some(AppSearchResult {
                         name: entry.name.clone(),
                         app_id: entry.app_id.clone(),
-                        executable_path: entry.executable_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-                        icon_path: entry.icon_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+                        executable_path: entry
+                            .executable_path
+                            .as_ref()
+                            .map(|p| p.to_string_lossy().to_string()),
+                        icon_path: entry
+                            .icon_path
+                            .as_ref()
+                            .map(|p| p.to_string_lossy().to_string()),
                         source: entry.source.clone(),
                         score,
                     })
@@ -189,7 +211,11 @@ impl AppIndex {
             })
             .collect();
 
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(top_k);
         scored
     }

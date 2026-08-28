@@ -28,7 +28,11 @@ impl S3Connector {
             .bucket
             .clone()
             .context("S3 connector requires 'bucket'")?;
-        let region_name = config.credentials.region.clone().unwrap_or_else(|| "us-east-1".to_string());
+        let region_name = config
+            .credentials
+            .region
+            .clone()
+            .unwrap_or_else(|| "us-east-1".to_string());
         let endpoint = config.credentials.endpoint.clone();
         let access_key = config.credentials.access_key.clone();
         let secret_key = config.credentials.secret_key.clone();
@@ -116,10 +120,18 @@ impl CloudConnector for S3Connector {
 
             loop {
                 if entries.len() >= MAX_LIST_KEYS {
-                    tracing::warn!("S3 connector {} reached list limit {}", self.id, MAX_LIST_KEYS);
+                    tracing::warn!(
+                        "S3 connector {} reached list limit {}",
+                        self.id,
+                        MAX_LIST_KEYS
+                    );
                     return Ok(entries);
                 }
-                let mut req = self.client.list_objects_v2().bucket(self.bucket.clone()).prefix(prefix.clone());
+                let mut req = self
+                    .client
+                    .list_objects_v2()
+                    .bucket(self.bucket.clone())
+                    .prefix(prefix.clone());
                 if let Some(token) = continuation_token.as_ref() {
                     req = req.continuation_token(token);
                 }

@@ -66,12 +66,24 @@ impl DaemonRunner {
         let exe = resolve_daemon_exe()
             .ok_or_else(|| anyhow!("mirage-daemon executable not found; ensure it is in the same directory as mirage or on PATH"))?;
 
-        std::fs::create_dir_all(&self.config.data_dir)
-            .with_context(|| format!("failed to create data dir {}", self.config.data_dir.display()))?;
-        std::fs::create_dir_all(&self.config.models_dir)
-            .with_context(|| format!("failed to create models dir {}", self.config.models_dir.display()))?;
-        std::fs::create_dir_all(&self.config.downloads_dir)
-            .with_context(|| format!("failed to create downloads dir {}", self.config.downloads_dir.display()))?;
+        std::fs::create_dir_all(&self.config.data_dir).with_context(|| {
+            format!(
+                "failed to create data dir {}",
+                self.config.data_dir.display()
+            )
+        })?;
+        std::fs::create_dir_all(&self.config.models_dir).with_context(|| {
+            format!(
+                "failed to create models dir {}",
+                self.config.models_dir.display()
+            )
+        })?;
+        std::fs::create_dir_all(&self.config.downloads_dir).with_context(|| {
+            format!(
+                "failed to create downloads dir {}",
+                self.config.downloads_dir.display()
+            )
+        })?;
 
         let mut child = Command::new(&exe)
             .arg("--data-dir")
@@ -93,7 +105,10 @@ impl DaemonRunner {
         // Give the child a moment to fail loudly if something is wrong.
         tokio::time::sleep(Duration::from_millis(300)).await;
         if let Some(status) = child.try_wait()? {
-            anyhow::bail!("daemon exited immediately with code {}", status.code().unwrap_or(-1));
+            anyhow::bail!(
+                "daemon exited immediately with code {}",
+                status.code().unwrap_or(-1)
+            );
         }
 
         let start = Instant::now();
@@ -134,9 +149,13 @@ fn resolve_daemon_exe() -> Option<PathBuf> {
         } else {
             "linux"
         };
-        let candidate = PathBuf::from(&resources_dir).join(os_dir).join("mirage-daemon");
+        let candidate = PathBuf::from(&resources_dir)
+            .join(os_dir)
+            .join("mirage-daemon");
         #[cfg(windows)]
-        let candidate = PathBuf::from(&resources_dir).join(os_dir).join("mirage-daemon.exe");
+        let candidate = PathBuf::from(&resources_dir)
+            .join(os_dir)
+            .join("mirage-daemon.exe");
         if candidate.exists() && is_executable(&candidate) {
             return Some(candidate);
         }

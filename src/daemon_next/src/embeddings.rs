@@ -19,8 +19,53 @@ pub trait Embedder: Send + Sync {
         texts.iter().map(|t| self.embed_text(t)).collect()
     }
 
+    /// Embed a large list of texts in memory-bounded sub-batches.
+    ///
+    /// The default implementation calculates a sub-batch size from the supplied
+    /// memory budget, dimensionality and maximum input length so that the
+    /// transient allocation for one embedding batch stays well below the budget.
+    fn embed_texts_batched(
+        &self,
+        texts: &[String],
+        memory_budget_mb: usize,
+    ) -> Result<Vec<Vec<f32>>> {
+        let sub_batch = estimate_embedding_batch_size(
+            memory_budget_mb,
+            self.dimension(),
+            DEFAULT_MAX_INPUT_LENGTH,
+        );
+        let mut results = Vec::with_capacity(texts.len());
+        for chunk in texts.chunks(sub_batch.max(1)) {
+            results.extend(self.embed_texts(chunk)?);
+        }
+        Ok(results)
+    }
+
     /// Expected vector dimensionality.
     fn dimension(&self) -> usize;
+}
+
+/// Estimate how many texts can be embedded in one batch without exceeding the
+/// supplied memory budget. Reserves room for model weights / runtime overhead
+/// and assumes worst-case transient tensors for the ONNX pipeline.
+pub fn estimate_embedding_batch_size(
+    memory_budget_mb: usize,
+    dimension: usize,
+    max_input_length: usize,
+) -> usize {
+    const MODEL_OVERHEAD_MB: usize = 1536;
+    let usable_mb = memory_budget_mb.saturating_sub(MODEL_OVERHEAD_MB);
+    if usable_mb == 0 {
+        return 1;
+    }
+    let usable_bytes = usable_mb * 1024 * 1024;
+    // Inputs: input_ids, attention_mask, token_type_ids (i64 each).
+    // Output vector (f32). Multiply by 2 to account for framework temporaries.
+    let per_item_bytes = (3 * max_input_length * 8 + dimension * 4) * 2;
+    if per_item_bytes == 0 {
+        return 1024;
+    }
+    (usable_bytes / per_item_bytes as usize).max(1)
 }
 
 cfg_if::cfg_if! {
@@ -69,7 +114,6 @@ cfg_if::cfg_if! {
             if !dir.is_dir() {
                 return None;
             }
-            let ext = if cfg!(target_os = "windows") { "dll" } else if cfg!(target_os = "macos") { "dylib" } else { "so" };
             let lib_name = if cfg!(target_os = "windows") {
                 String::from("onnxruntime.dll")
             } else if cfg!(target_os = "macos") {
@@ -290,5 +334,17 @@ mod tests {
         let a = embedder.embed_text("hello").unwrap();
         let b = embedder.embed_text("hello").unwrap();
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn estimate_batch_size_is_positive() {
+        let batch = super::estimate_embedding_batch_size(3072, 384, 128);
+        assert!(batch > 0);
+    }
+
+    #[test]
+    fn estimate_batch_size_clamps_to_one() {
+        let batch = super::estimate_embedding_batch_size(0, 384, 128);
+        assert_eq!(batch, 1);
     }
 }

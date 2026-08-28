@@ -1,10 +1,10 @@
 pub mod analytics;
+pub mod apps;
 pub mod config;
 pub mod connectors;
+pub mod daemon_runner;
 pub mod db;
 pub mod embeddings;
-pub mod apps;
-pub mod daemon_runner;
 pub mod ipc;
 pub mod local_index;
 pub mod logging;

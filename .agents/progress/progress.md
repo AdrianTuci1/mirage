@@ -7,6 +7,7 @@
 - **Progres general:** ~99% pentru funcționalitatea locală standalone
 - **Wizard/onboarding:** exclus momentan; modulele se gestionează direct din Settings → Modules.
 - **Build artifacts:** directorul `src/daemon_next/target/` a fost curățat (~20GB eliberați).
+- **Buget memorie indexare:** daemonul respectă `memory_budget_mb` (default 3072 MB); batching embeddings, upsert LanceDB și procesare cloud sunt limitate de acest buget.
 
 ## Ce funcționează local (finalizat)
 
@@ -20,7 +21,8 @@
 | File watcher | ✅ | reindexare automată la schimbări în `roots` |
 | Packaging | ✅ | script-uri DMG/MSI/DEB, binare daemon/CLI în `package-resources/` |
 | SLM heuristic | ✅ | routing intenție + scaffold ONNX |
-| Teste Rust | ✅ | 29 unit tests trec; `ipc_ping` eșuează cu timeout la pornirea daemonului (de investigat, probabil environmental) |
+| Batching/downsampling indexare | ✅ | embeddings în sub-batches cu buget memorie, upsert batched LanceDB, procesare cloud în chunk-uri, downsampling vectorial |
+| Teste Rust | ✅ | unit tests trec; `ipc_ping` eșuează cu timeout la pornirea daemonului (de investigat, probabil environmental) |
 
 ## Ce mai trebuie pentru local running complet
 

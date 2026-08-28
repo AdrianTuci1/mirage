@@ -19,7 +19,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{debug, info, warn};
 
 type MethodHandler = Arc<
-    dyn Fn(Value) -> Pin<Box<dyn Future<Output = Result<Value, JsonRpcError>> + Send>> + Send + Sync,
+    dyn Fn(Value) -> Pin<Box<dyn Future<Output = Result<Value, JsonRpcError>> + Send>>
+        + Send
+        + Sync,
 >;
 
 #[derive(Debug, Deserialize)]
@@ -151,15 +153,12 @@ impl IpcServer {
 
                 let results = match (request.query, request.query_vector) {
                     (Some(query), _) => {
-                        search
-                            .search(&query, request.top_k)
-                            .await
-                            .map_err(|e| {
-                                JsonRpcError::new(
-                                    crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                                    format!("search failed: {}", e),
-                                )
-                            })?
+                        search.search(&query, request.top_k).await.map_err(|e| {
+                            JsonRpcError::new(
+                                crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                                format!("search failed: {}", e),
+                            )
+                        })?
                     }
                     (None, Some(vector)) => {
                         // Direct vector search: semantic-only, reserved for programmatic callers.
@@ -219,15 +218,12 @@ impl IpcServer {
                 };
 
                 let dest = PathBuf::from(request.dest_path);
-                search
-                    .download_result(&result, &dest)
-                    .await
-                    .map_err(|e| {
-                        JsonRpcError::new(
-                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                            format!("download_file failed: {}", e),
-                        )
-                    })?;
+                search.download_result(&result, &dest).await.map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                        format!("download_file failed: {}", e),
+                    )
+                })?;
 
                 Ok(json!({ "dest_path": dest.to_string_lossy() }))
             })
@@ -239,12 +235,13 @@ impl IpcServer {
             let search = Arc::clone(&update_search);
             let config_path = update_config_path.clone();
             Box::pin(async move {
-                let request: UpdateConnectorsRequest = serde_json::from_value(params).map_err(|e| {
-                    JsonRpcError::new(
-                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
-                        format!("invalid update_connectors params: {}", e),
-                    )
-                })?;
+                let request: UpdateConnectorsRequest =
+                    serde_json::from_value(params).map_err(|e| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                            format!("invalid update_connectors params: {}", e),
+                        )
+                    })?;
 
                 let count = search
                     .update_connectors(request.connectors, &config_path)
@@ -261,8 +258,10 @@ impl IpcServer {
         });
 
         let index_store = Arc::clone(&store);
+        let index_batch_size = server.config.index_batch_size;
         server.register("index", move |params: Value| {
             let store = Arc::clone(&index_store);
+            let batch_size = index_batch_size;
             Box::pin(async move {
                 let request: IndexRequest = serde_json::from_value(params).map_err(|e| {
                     JsonRpcError::new(
@@ -270,12 +269,15 @@ impl IpcServer {
                         format!("invalid index params: {}", e),
                     )
                 })?;
-                store.upsert(request.records).await.map_err(|e| {
-                    JsonRpcError::new(
-                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                        format!("index failed: {}", e),
-                    )
-                })?;
+                store
+                    .upsert_batched(request.records, batch_size)
+                    .await
+                    .map_err(|e| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            format!("index failed: {}", e),
+                        )
+                    })?;
                 let count = store.count().await.map_err(|e| {
                     JsonRpcError::new(
                         crate::ipc::protocol::ERROR_INTERNAL_ERROR,
@@ -374,20 +376,21 @@ impl IpcServer {
                     )
                 })?;
 
-                let vector = tokio::task::spawn_blocking(move || embedder.embed_text(&request.text))
-                    .await
-                    .map_err(|e| {
-                        JsonRpcError::new(
-                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                            format!("embed task failed: {}", e),
-                        )
-                    })?
-                    .map_err(|e| {
-                        JsonRpcError::new(
-                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                            format!("embed failed: {}", e),
-                        )
-                    })?;
+                let vector =
+                    tokio::task::spawn_blocking(move || embedder.embed_text(&request.text))
+                        .await
+                        .map_err(|e| {
+                            JsonRpcError::new(
+                                crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                                format!("embed task failed: {}", e),
+                            )
+                        })?
+                        .map_err(|e| {
+                            JsonRpcError::new(
+                                crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                                format!("embed failed: {}", e),
+                            )
+                        })?;
 
                 serde_json::to_value(vector).map_err(|e| {
                     JsonRpcError::new(
@@ -402,12 +405,13 @@ impl IpcServer {
         server.register("download_module", move |params: Value| {
             let manager = Arc::clone(&modules_manager);
             Box::pin(async move {
-                let request: DownloadModuleRequest = serde_json::from_value(params).map_err(|e| {
-                    JsonRpcError::new(
-                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
-                        format!("invalid download_module params: {}", e),
-                    )
-                })?;
+                let request: DownloadModuleRequest =
+                    serde_json::from_value(params).map_err(|e| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                            format!("invalid download_module params: {}", e),
+                        )
+                    })?;
 
                 manager
                     .download_module(&request.module_id, request.force)
@@ -449,12 +453,15 @@ impl IpcServer {
                     )
                 })?;
 
-                let status = manager.module_status(&request.module_id).await.ok_or_else(|| {
-                    JsonRpcError::new(
-                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                        format!("module {} not found", request.module_id),
-                    )
-                })?;
+                let status = manager
+                    .module_status(&request.module_id)
+                    .await
+                    .ok_or_else(|| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            format!("module {} not found", request.module_id),
+                        )
+                    })?;
 
                 serde_json::to_value(status).map_err(|e| {
                     JsonRpcError::new(
@@ -500,12 +507,15 @@ impl IpcServer {
                         )
                     })?;
 
-                let status = manager.module_status(&request.module_id).await.ok_or_else(|| {
-                    JsonRpcError::new(
-                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                        "module status unavailable after cancel",
-                    )
-                })?;
+                let status = manager
+                    .module_status(&request.module_id)
+                    .await
+                    .ok_or_else(|| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            "module status unavailable after cancel",
+                        )
+                    })?;
 
                 serde_json::to_value(status).map_err(|e| {
                     JsonRpcError::new(
@@ -537,12 +547,15 @@ impl IpcServer {
                         )
                     })?;
 
-                let status = manager.module_status(&request.module_id).await.ok_or_else(|| {
-                    JsonRpcError::new(
-                        crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                        "module status unavailable after remove",
-                    )
-                })?;
+                let status = manager
+                    .module_status(&request.module_id)
+                    .await
+                    .ok_or_else(|| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            "module status unavailable after remove",
+                        )
+                    })?;
 
                 serde_json::to_value(status).map_err(|e| {
                     JsonRpcError::new(
@@ -609,7 +622,9 @@ impl IpcServer {
                     format!("failed to remove stale socket {}", socket_path.display())
                 })?;
             }
-            let parent = socket_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+            let parent = socket_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."));
             tokio::fs::create_dir_all(parent).await.with_context(|| {
                 format!("failed to create socket directory {}", parent.display())
             })?;
@@ -620,7 +635,10 @@ impl IpcServer {
             println!("Mirage daemon listening on {}", socket_path.display());
 
             loop {
-                let (stream, _) = listener.accept().await.context("failed to accept connection")?;
+                let (stream, _) = listener
+                    .accept()
+                    .await
+                    .context("failed to accept connection")?;
                 let server = Arc::clone(&this);
                 tokio::spawn(async move {
                     if let Err(e) = server.handle_stream(stream).await {
@@ -647,7 +665,9 @@ impl IpcServer {
                     .context("failed to create named pipe server")?;
                 first_instance = false;
 
-                pipe.connect().await.context("failed to accept pipe connection")?;
+                pipe.connect()
+                    .await
+                    .context("failed to accept pipe connection")?;
                 let server = Arc::clone(&this);
                 tokio::spawn(async move {
                     if let Err(e) = server.handle_stream(pipe).await {
@@ -682,12 +702,16 @@ impl IpcServer {
 
             debug!("received JSON-RPC request: {}", line);
             let response = self.dispatch_line(line).await;
-            let response_text = serde_json::to_string(&response).context("failed to serialize response")?;
+            let response_text =
+                serde_json::to_string(&response).context("failed to serialize response")?;
             writer
                 .write_all(response_text.as_bytes())
                 .await
                 .context("failed to write response")?;
-            writer.write_all(b"\n").await.context("failed to write newline")?;
+            writer
+                .write_all(b"\n")
+                .await
+                .context("failed to write newline")?;
             writer.flush().await.context("failed to flush response")?;
         }
 

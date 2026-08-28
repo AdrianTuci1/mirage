@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use mirage_daemon::{DaemonRunner, ipc::client::IpcClient};
+use mirage_daemon::{ipc::client::IpcClient, DaemonRunner};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -121,7 +121,10 @@ async fn module_command(runner: &mut DaemonRunner, cmd: &ModuleCommand) -> Resul
                 print_response(&response)?;
                 return Ok(());
             }
-            println!("Module '{}' download requested. Tracking progress...", module_id);
+            println!(
+                "Module '{}' download requested. Tracking progress...",
+                module_id
+            );
             track_module(runner, module_id).await?;
         }
         ModuleCommand::Status { module_id } => {
@@ -217,7 +220,11 @@ async fn track_module(runner: &mut DaemonRunner, module_id: &str) -> Result<()> 
     }
 }
 
-async fn ipc_call(runner: &mut DaemonRunner, method: &str, params: Option<Value>) -> Result<mirage_daemon::ipc::protocol::JsonRpcResponse> {
+async fn ipc_call(
+    runner: &mut DaemonRunner,
+    method: &str,
+    params: Option<Value>,
+) -> Result<mirage_daemon::ipc::protocol::JsonRpcResponse> {
     #[cfg(unix)]
     {
         let path = runner.endpoint();
@@ -241,7 +248,10 @@ fn print_response(response: &mirage_daemon::ipc::protocol::JsonRpcResponse) -> R
             eprintln!("{}", serde_json::to_string_pretty(data).unwrap_or_default());
         }
     } else if let Some(result) = &response.result {
-        println!("{}", serde_json::to_string_pretty(result).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(result).unwrap_or_default()
+        );
     }
     Ok(())
 }

@@ -36,11 +36,15 @@ pub fn default_catalog() -> Catalog {
         PlatformEntry {
             url: String::from("https://example.com/mirage/onnx_runtime-1.28.0.tar.gz"),
             size: 0,
-            checksum: String::from("0000000000000000000000000000000000000000000000000000000000000000"),
+            checksum: String::from(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            ),
             archive_format: ArchiveFormat::TarGz,
             files: vec![FileEntry {
                 relative_path: String::from("libonnxruntime.so"),
-                sha256: String::from("0000000000000000000000000000000000000000000000000000000000000000"),
+                sha256: String::from(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                ),
                 executable: false,
                 required: true,
             }],
@@ -65,11 +69,15 @@ pub fn default_catalog() -> Catalog {
         PlatformEntry {
             url: String::from("https://example.com/mirage/duckdb-1.1.3.tar.gz"),
             size: 0,
-            checksum: String::from("0000000000000000000000000000000000000000000000000000000000000000"),
+            checksum: String::from(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            ),
             archive_format: ArchiveFormat::TarGz,
             files: vec![FileEntry {
                 relative_path: String::from("libduckdb.so"),
-                sha256: String::from("0000000000000000000000000000000000000000000000000000000000000000"),
+                sha256: String::from(
+                    "0000000000000000000000000000000000000000000000000000000000000000",
+                ),
                 executable: false,
                 required: true,
             }],

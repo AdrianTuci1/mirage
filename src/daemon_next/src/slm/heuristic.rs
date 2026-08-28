@@ -78,26 +78,8 @@ impl SlmEngine for HeuristicSlmEngine {
 fn is_sql_question(question: &str) -> bool {
     let lower = question.to_lowercase();
     let sql_keywords = [
-        "how many",
-        "count",
-        "sum",
-        "average",
-        "avg",
-        "total",
-        "max",
-        "min",
-        "rows",
-        "columns",
-        "table",
-        "csv",
-        "parquet",
-        "database",
-        "sql",
-        "select",
-        "from",
-        "where",
-        "group",
-        "order",
+        "how many", "count", "sum", "average", "avg", "total", "max", "min", "rows", "columns",
+        "table", "csv", "parquet", "database", "sql", "select", "from", "where", "group", "order",
     ];
     sql_keywords.iter().any(|kw| lower.contains(kw))
 }
@@ -133,7 +115,9 @@ fn heuristic_sql(question: &str, analytics: &Analytics) -> Result<(String, Strin
         ));
     };
 
-    let rows = analytics.query(&sql).context("heuristic SQL query failed")?;
+    let rows = analytics
+        .query(&sql)
+        .context("heuristic SQL query failed")?;
     let summary = if rows.is_empty() {
         format!("No results found for '{}'.", question)
     } else {
@@ -172,8 +156,12 @@ mod tests {
     #[test]
     fn heuristic_sql_lists_tables() {
         let (analytics, _dir) = temp_analytics();
-        analytics.execute("CREATE TABLE photos (id INTEGER)").unwrap();
-        analytics.execute("INSERT INTO photos VALUES (1), (2), (3)").unwrap();
+        analytics
+            .execute("CREATE TABLE photos (id INTEGER)")
+            .unwrap();
+        analytics
+            .execute("INSERT INTO photos VALUES (1), (2), (3)")
+            .unwrap();
 
         let (_, summary) = heuristic_sql("how many photos?", &analytics).unwrap();
         assert!(summary.contains("3"));

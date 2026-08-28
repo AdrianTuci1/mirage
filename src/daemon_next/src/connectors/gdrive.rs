@@ -7,7 +7,8 @@ use std::path::Path;
 use std::time::Duration;
 
 const DRIVE_API: &str = "https://www.googleapis.com/drive/v3";
-const FIELDS: &str = "nextPageToken,files(id,name,size,modifiedTime,mimeType,webViewLink,thumbnailLink)";
+const FIELDS: &str =
+    "nextPageToken,files(id,name,size,modifiedTime,mimeType,webViewLink,thumbnailLink)";
 const MAX_LIST: usize = 10_000;
 
 pub struct GDriveConnector {
@@ -58,7 +59,10 @@ impl GDriveConnector {
             let id = trimmed.strip_prefix("folder:").unwrap_or(trimmed);
             return Some(format!("'{}' in parents", id));
         }
-        Some(format!("name contains '{}' or '{}' in parents", trimmed, trimmed))
+        Some(format!(
+            "name contains '{}' or '{}' in parents",
+            trimmed, trimmed
+        ))
     }
 }
 
@@ -78,7 +82,11 @@ impl CloudConnector for GDriveConnector {
 
     async fn list_entries(&self, _prefix: &str) -> Result<Vec<RemoteEntry>> {
         let mut all = Vec::new();
-        let roots = if self.roots.is_empty() { vec![String::new()] } else { self.roots.clone() };
+        let roots = if self.roots.is_empty() {
+            vec![String::new()]
+        } else {
+            self.roots.clone()
+        };
 
         for root in roots {
             let mut page_token: Option<String> = None;
@@ -86,7 +94,11 @@ impl CloudConnector for GDriveConnector {
 
             loop {
                 if all.len() >= MAX_LIST {
-                    tracing::warn!("GDrive connector {} reached list limit {}", self.id, MAX_LIST);
+                    tracing::warn!(
+                        "GDrive connector {} reached list limit {}",
+                        self.id,
+                        MAX_LIST
+                    );
                     return Ok(all);
                 }
                 let mut request = self
@@ -112,10 +124,9 @@ impl CloudConnector for GDriveConnector {
                         continue;
                     }
                     let size = file.size.as_ref().and_then(|s| s.parse().ok()).unwrap_or(0);
-                    let open_url = file
-                        .web_view_link
-                        .clone()
-                        .or_else(|| Some(format!("https://drive.google.com/file/d/{}/view", file.id)));
+                    let open_url = file.web_view_link.clone().or_else(|| {
+                        Some(format!("https://drive.google.com/file/d/{}/view", file.id))
+                    });
                     all.push(RemoteEntry {
                         id: self.uri(&file.id, &file.name),
                         path: file.id.clone(),
@@ -150,7 +161,10 @@ impl CloudConnector for GDriveConnector {
             .send()
             .await?;
         if !response.status().is_success() {
-            anyhow::bail!("Google Drive download failed: {}", response.text().await.unwrap_or_default());
+            anyhow::bail!(
+                "Google Drive download failed: {}",
+                response.text().await.unwrap_or_default()
+            );
         }
         let bytes = response.bytes().await?;
         tokio::fs::write(dest, bytes).await?;

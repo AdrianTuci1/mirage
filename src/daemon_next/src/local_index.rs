@@ -79,10 +79,7 @@ impl LocalFileIndex {
         self.name_to_indices.clear();
         for (idx, entry) in self.entries.iter().enumerate() {
             for token in path_tokens(&entry.relative_path) {
-                self.name_to_indices
-                    .entry(token)
-                    .or_default()
-                    .push(idx);
+                self.name_to_indices.entry(token).or_default().push(idx);
             }
         }
     }
@@ -114,10 +111,7 @@ impl LocalFileIndex {
                 };
 
                 if metadata.is_dir() {
-                    let child_name = entry
-                        .file_name()
-                        .to_string_lossy()
-                        .to_lowercase();
+                    let child_name = entry.file_name().to_string_lossy().to_lowercase();
                     if !excluded.contains(&child_name) {
                         stack.push(path);
                     }
@@ -171,7 +165,11 @@ impl LocalFileIndex {
             })
             .collect();
 
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(top_k);
         scored
     }

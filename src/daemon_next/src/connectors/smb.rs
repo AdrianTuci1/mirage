@@ -32,7 +32,11 @@ impl SmbConnector {
             .clone()
             .context("SMB connector requires 'share'")?;
         let root = config.credentials.endpoint.clone().unwrap_or_default();
-        let server = format!("smb://{}/{}", host.trim_end_matches('/'), share.trim_start_matches('/'));
+        let server = format!(
+            "smb://{}/{}",
+            host.trim_end_matches('/'),
+            share.trim_start_matches('/')
+        );
 
         Ok(Self {
             id: config.id.clone(),
@@ -47,7 +51,12 @@ impl SmbConnector {
     }
 
     fn uri(&self, path: &str) -> String {
-        format!("smb://{}/{}/{}", self.server.trim_start_matches("smb://"), self.share.trim_start_matches('/'), path.trim_start_matches('/'))
+        format!(
+            "smb://{}/{}/{}",
+            self.server.trim_start_matches("smb://"),
+            self.share.trim_start_matches('/'),
+            path.trim_start_matches('/')
+        )
     }
 
     fn normalize_root(&self) -> String {
@@ -80,7 +89,9 @@ impl SmbConnector {
                 tracing::warn!("SMB connector {} reached list limit {}", self.id, MAX_LIST);
                 break;
             }
-            let dirents = client.list(&dir).with_context(|| format!("SMB list failed for {}", dir))?;
+            let dirents = client
+                .list(&dir)
+                .with_context(|| format!("SMB list failed for {}", dir))?;
             for entry in dirents {
                 let name = entry.name().to_string();
                 if name == "." || name == ".." {

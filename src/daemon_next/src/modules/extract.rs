@@ -12,8 +12,12 @@ pub fn extract_archive(
 ) -> Result<Vec<PathBuf>> {
     let archive_path = archive_path.as_ref();
     let dest_dir = dest_dir.as_ref();
-    fs::create_dir_all(dest_dir)
-        .with_context(|| format!("failed to create extraction directory {}", dest_dir.display()))?;
+    fs::create_dir_all(dest_dir).with_context(|| {
+        format!(
+            "failed to create extraction directory {}",
+            dest_dir.display()
+        )
+    })?;
 
     match format {
         ArchiveFormat::TarGz => extract_tar_gz(archive_path, dest_dir),
@@ -78,10 +82,7 @@ fn extract_raw(archive_path: &Path, dest_dir: &Path) -> Result<Vec<PathBuf>> {
 }
 
 /// Verify extracted files against the manifest and fix executable bits.
-pub fn verify_extracted_files(
-    dest_dir: &Path,
-    files: &[FileEntry],
-) -> Result<Vec<PathBuf>> {
+pub fn verify_extracted_files(dest_dir: &Path, files: &[FileEntry]) -> Result<Vec<PathBuf>> {
     let mut verified = Vec::new();
     for entry in files {
         let target = dest_dir.join(&entry.relative_path);
@@ -135,7 +136,9 @@ fn hash_file_sha256(path: &Path) -> Result<String> {
 /// Prevent path traversal attacks by resolving the entry path inside dest_dir.
 fn sanitize_path(dest_dir: &Path, entry_path: &Path) -> Result<PathBuf> {
     let target = dest_dir.join(entry_path);
-    let canonical_dest = dest_dir.canonicalize().unwrap_or_else(|_| dest_dir.to_path_buf());
+    let canonical_dest = dest_dir
+        .canonicalize()
+        .unwrap_or_else(|_| dest_dir.to_path_buf());
     let canonical_target = target.canonicalize().unwrap_or_else(|_| target.clone());
     if !canonical_target.starts_with(&canonical_dest) {
         return Err(anyhow::anyhow!(
@@ -184,7 +187,9 @@ mod tests {
 
         let bad_entries = vec![FileEntry {
             relative_path: String::from("libduckdb.dylib"),
-            sha256: String::from("0000000000000000000000000000000000000000000000000000000000000000"),
+            sha256: String::from(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            ),
             executable: false,
             required: true,
         }];

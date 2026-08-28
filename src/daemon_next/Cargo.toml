@@ -41,6 +41,7 @@ aws-config = "1"
 pavao = { version = "0.2", optional = true }
 urlencoding = "2"
 notify-debouncer-full = "0.5"
+chrono = { version = "0.4", features = ["serde"] }
 
 [features]
 default = ["duckdb", "onnx"]

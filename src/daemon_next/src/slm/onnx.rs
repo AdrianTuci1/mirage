@@ -6,7 +6,6 @@ use anyhow::{anyhow, Context, Result};
 use ort::session::builder::GraphOptimizationLevel;
 use ort::session::Session;
 use ort::value::{Shape, Tensor, Value};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tokenizers::Tokenizer;
@@ -61,7 +60,10 @@ impl OnnxSlmEngine {
         }
 
         let inference = T5Inference::new(&tokenizer_path, &encoder_path, &decoder_path)?;
-        Ok(Self { inference, top_k: 10 })
+        Ok(Self {
+            inference,
+            top_k: 10,
+        })
     }
 
     pub fn with_top_k(mut self, top_k: usize) -> Self {
@@ -157,7 +159,8 @@ impl T5Inference {
             .map(|&u| u as i64)
             .collect();
 
-        let (encoder_shape, encoder_hidden_states) = self.run_encoder(&input_ids, &attention_mask)?;
+        let (encoder_shape, encoder_hidden_states) =
+            self.run_encoder(&input_ids, &attention_mask)?;
 
         let mut decoder_ids = vec![self.pad_token_id];
         let mut decoder_mask = vec![1_i64];
@@ -180,26 +183,17 @@ impl T5Inference {
         }
 
         // Skip the initial pad/start token for decoding.
-        let output_ids: Vec<u32> = decoder_ids
-            .iter()
-            .skip(1)
-            .map(|&i| i as u32)
-            .collect();
+        let output_ids: Vec<u32> = decoder_ids.iter().skip(1).map(|&i| i as u32).collect();
 
         self.tokenizer
             .decode(&output_ids, true)
             .map_err(|e| anyhow!("failed to decode output: {}", e))
     }
 
-    fn run_encoder(
-        &self,
-        input_ids: &[i64],
-        attention_mask: &[i64],
-    ) -> Result<(Shape, Vec<f32>)> {
+    fn run_encoder(&self, input_ids: &[i64], attention_mask: &[i64]) -> Result<(Shape, Vec<f32>)> {
         let seq_len = input_ids.len();
-        let input_ids_tensor =
-            Tensor::from_array((vec![1_usize, seq_len], input_ids.to_vec()))
-                .context("failed to create encoder input_ids tensor")?;
+        let input_ids_tensor = Tensor::from_array((vec![1_usize, seq_len], input_ids.to_vec()))
+            .context("failed to create encoder input_ids tensor")?;
         let attention_mask_tensor =
             Tensor::from_array((vec![1_usize, seq_len], attention_mask.to_vec()))
                 .context("failed to create encoder attention_mask tensor")?;
@@ -223,7 +217,10 @@ impl T5Inference {
             .run(inputs)
             .map_err(|e| anyhow!("encoder inference failed: {}", e))?;
 
-        let (_, value) = outputs.iter().next().context("encoder returned no outputs")?;
+        let (_, value) = outputs
+            .iter()
+            .next()
+            .context("encoder returned no outputs")?;
         let (shape, data) = value
             .try_extract_tensor::<f32>()
             .context("failed to extract encoder hidden states")?;
@@ -281,7 +278,10 @@ impl T5Inference {
             .run(inputs)
             .map_err(|e| anyhow!("decoder inference failed: {}", e))?;
 
-        let (_, value) = outputs.iter().next().context("decoder returned no outputs")?;
+        let (_, value) = outputs
+            .iter()
+            .next()
+            .context("decoder returned no outputs")?;
         let (shape, data) = value
             .try_extract_tensor::<f32>()
             .context("failed to extract decoder logits")?;
@@ -311,7 +311,9 @@ fn find_module_dir(models_dir: &Path) -> Result<PathBuf> {
 }
 
 fn list_tables(analytics: &Analytics) -> Result<Vec<String>> {
-    let rows = analytics.query("SHOW TABLES").context("failed to list tables")?;
+    let rows = analytics
+        .query("SHOW TABLES")
+        .context("failed to list tables")?;
     Ok(rows
         .into_iter()
         .filter_map(|row| row.values().next().cloned())
@@ -458,7 +460,10 @@ mod tests {
 
     #[test]
     fn build_prompt_includes_tables() {
-        let prompt = build_prompt("how many photos?", &[String::from("photos"), String::from("videos")]);
+        let prompt = build_prompt(
+            "how many photos?",
+            &[String::from("photos"), String::from("videos")],
+        );
         assert!(prompt.contains("how many photos?"));
         assert!(prompt.contains("photos, videos"));
         assert!(prompt.contains("ACTION: semantic_search"));

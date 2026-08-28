@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use mirage_daemon::{logging, Analytics, create_embedder, DaemonConfig, FileWatcher, HeuristicSlmEngine, IpcServer, LanceDbStore, ModuleManager, UnifiedSearch};
+use mirage_daemon::{
+    create_embedder, logging, Analytics, DaemonConfig, FileWatcher, HeuristicSlmEngine, IpcServer,
+    LanceDbStore, ModuleManager, UnifiedSearch,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -85,7 +88,11 @@ async fn main() -> Result<()> {
         .save(&config_path)
         .with_context(|| format!("failed to save config to {}", config_path.display()))?;
 
-    let store = Arc::new(LanceDbStore::open(&config).await.context("failed to open LanceDB store")?);
+    let store = Arc::new(
+        LanceDbStore::open(&config)
+            .await
+            .context("failed to open LanceDB store")?,
+    );
     let embedder = create_embedder(&config.models_dir).context("failed to initialize embedder")?;
     let analytics = Arc::new(Analytics::open(&config).context("failed to open analytics")?);
     let module_manager = Arc::new(ModuleManager::new(&config, None).await);
@@ -108,8 +115,7 @@ async fn main() -> Result<()> {
     let unified_search = Arc::new(UnifiedSearch::new(
         Arc::clone(&store),
         Arc::clone(&embedder),
-        config.roots.clone(),
-        config.excluded_dirs.clone(),
+        &config,
         connectors,
     ));
 
@@ -131,11 +137,18 @@ async fn main() -> Result<()> {
         tracing::warn!("failed to start file watcher");
     }
 
-    let server = IpcServer::new(store, embedder, analytics, module_manager, slm, unified_search, config_path.clone(), config.clone());
+    let server = IpcServer::new(
+        store,
+        embedder,
+        analytics,
+        module_manager,
+        slm,
+        unified_search,
+        config_path.clone(),
+        config.clone(),
+    );
 
-    let server_handle = tokio::spawn(async move {
-        server.run().await
-    });
+    let server_handle = tokio::spawn(async move { server.run().await });
 
     tokio::select! {
         result = server_handle => {

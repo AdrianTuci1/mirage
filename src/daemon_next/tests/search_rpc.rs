@@ -87,10 +87,7 @@ async fn search_rpc_returns_empty_then_indexed_results() {
     .expect("failed to call index");
 
     assert_eq!(index_result.error, None);
-    assert_eq!(
-        index_result.result,
-        Some(serde_json::json!({ "count": 2 }))
-    );
+    assert_eq!(index_result.result, Some(serde_json::json!({ "count": 2 })));
 
     let search_result = mirage_daemon::ipc::client::IpcClient::call(
         &socket_path,
@@ -104,7 +101,12 @@ async fn search_rpc_returns_empty_then_indexed_results() {
     .expect("failed to call search after indexing");
 
     assert_eq!(search_result.error, None);
-    let results = search_result.result.expect("missing search result").as_array().expect("result is not array").clone();
+    let results = search_result
+        .result
+        .expect("missing search result")
+        .as_array()
+        .expect("result is not array")
+        .clone();
     assert_eq!(results.len(), 2, "expected both documents to be returned");
     assert_eq!(results[0]["id"], "doc-1");
     assert!(
@@ -138,7 +140,10 @@ async fn query_rpc_executes_duckdb_sql() {
     .expect("failed to call query");
 
     assert_eq!(result.error, None);
-    let rows = result.result.expect("missing query result").as_array()
+    let rows = result
+        .result
+        .expect("missing query result")
+        .as_array()
         .expect("result is not array")
         .clone();
     assert_eq!(rows.len(), 1);
@@ -166,7 +171,10 @@ async fn embed_rpc_returns_vector() {
     .expect("failed to call embed");
 
     assert_eq!(result.error, None);
-    let vector = result.result.expect("missing embed result").as_array()
+    let vector = result
+        .result
+        .expect("missing embed result")
+        .as_array()
         .expect("result is not array")
         .clone();
     assert_eq!(vector.len(), 384);
@@ -213,7 +221,10 @@ async fn search_rpc_embeds_query_text() {
     .expect("failed to call search by text");
 
     assert_eq!(search_result.error, None);
-    let results = search_result.result.expect("missing search result").as_array()
+    let results = search_result
+        .result
+        .expect("missing search result")
+        .as_array()
         .expect("result is not array")
         .clone();
     assert!(!results.is_empty());
@@ -269,16 +280,14 @@ async fn index_files_rpc_scans_configured_root() {
     .await;
     assert!(ready.is_ok(), "daemon did not start in time");
 
-    let result = mirage_daemon::ipc::client::IpcClient::call(
-        &socket_path,
-        "index_files",
-        None,
-    )
-    .await
-    .expect("failed to call index_files");
+    let result = mirage_daemon::ipc::client::IpcClient::call(&socket_path, "index_files", None)
+        .await
+        .expect("failed to call index_files");
 
     assert_eq!(result.error, None);
-    let count = result.result.expect("missing result")["count"].as_u64().expect("count not a number");
+    let count = result.result.expect("missing result")["count"]
+        .as_u64()
+        .expect("count not a number");
     assert_eq!(count, 1, "expected one indexed file");
 
     let search_result = mirage_daemon::ipc::client::IpcClient::call(
@@ -293,7 +302,10 @@ async fn index_files_rpc_scans_configured_root() {
     .expect("failed to call search");
 
     assert_eq!(search_result.error, None);
-    let results = search_result.result.expect("missing result").as_array()
+    let results = search_result
+        .result
+        .expect("missing result")
+        .as_array()
         .expect("result not array")
         .clone();
     assert_eq!(results.len(), 1);

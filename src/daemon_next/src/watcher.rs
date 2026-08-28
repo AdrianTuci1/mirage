@@ -26,7 +26,10 @@ impl FileWatcher {
         let mut debouncer = new_debouncer(
             Duration::from_secs(2),
             None,
-            move |res: Result<Vec<notify_debouncer_full::DebouncedEvent>, Vec<notify_debouncer_full::notify::Error>>| {
+            move |res: Result<
+                Vec<notify_debouncer_full::DebouncedEvent>,
+                Vec<notify_debouncer_full::notify::Error>,
+            >| {
                 if let Ok(events) = res {
                     if !events.is_empty() {
                         let _ = tx.send(());

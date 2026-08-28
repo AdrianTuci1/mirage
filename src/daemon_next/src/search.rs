@@ -1,10 +1,12 @@
 use crate::apps::AppIndex;
-use crate::connectors::ConnectorRegistry;
-use crate::db::LanceDbStore;
+use crate::config::DaemonConfig;
+use crate::connectors::{ConnectorRegistry, RemoteEntry};
+use crate::db::{downsample_vector, LanceDbStore};
 use crate::embeddings::Embedder;
 use crate::local_index::{LocalFileIndex, LocalSearchResult};
-use crate::models::{SearchResult, SearchResultCategory};
+use crate::models::{Record, SearchResult, SearchResultCategory};
 use anyhow::{Context, Result};
+use chrono::Utc;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -21,14 +23,17 @@ pub struct UnifiedSearch {
     roots: Vec<PathBuf>,
     excluded_dirs: Vec<String>,
     connectors: Arc<std::sync::Mutex<ConnectorRegistry>>,
+    memory_budget_mb: usize,
+    index_batch_size: usize,
+    cloud_index_limit: usize,
+    vector_dim: usize,
 }
 
 impl UnifiedSearch {
     pub fn new(
         store: Arc<LanceDbStore>,
         embedder: Arc<dyn Embedder>,
-        roots: Vec<PathBuf>,
-        excluded_dirs: Vec<String>,
+        config: &DaemonConfig,
         connectors: ConnectorRegistry,
     ) -> Self {
         Self {
@@ -36,15 +41,19 @@ impl UnifiedSearch {
             embedder,
             file_index: Mutex::new(LocalFileIndex::new()),
             app_index: Mutex::new(AppIndex::new()),
-            roots,
-            excluded_dirs,
+            roots: config.roots.clone(),
+            excluded_dirs: config.excluded_dirs.clone(),
             connectors: Arc::new(std::sync::Mutex::new(connectors)),
+            memory_budget_mb: config.memory_budget_mb,
+            index_batch_size: config.index_batch_size.max(1),
+            cloud_index_limit: config.cloud_index_limit,
+            vector_dim: config.vector_dim.max(1),
         }
     }
 
     /// Scan the configured roots and configured cloud connectors and rebuild the
-    /// file name index. Cloud connectors are only indexed by metadata; no file
-    /// content is downloaded.
+    /// file name index. Cloud connectors are indexed by metadata and their paths
+    /// are embedded and stored in LanceDB in memory-bounded batches.
     pub async fn index_files(&self) -> Result<usize> {
         {
             let mut index = self
@@ -56,36 +65,123 @@ impl UnifiedSearch {
             index.index_roots(&self.roots, &self.excluded_dirs);
         }
 
-        // Index configured cloud sources by metadata only. Collect connector
-        // handles without holding the lock across await points.
-        let mut remote_batches: Vec<(String, Vec<crate::connectors::RemoteEntry>)> = Vec::new();
-        let connector_handles: Vec<(String, std::sync::Arc<dyn crate::connectors::CloudConnector>)> = {
+        // Index configured cloud sources by metadata and by semantic path
+        // embeddings. Collect connector handles without holding the lock across
+        // await points.
+        let connector_handles: Vec<(String, Arc<dyn crate::connectors::CloudConnector>)> = {
             let connectors = self.connectors.lock().unwrap();
-            connectors.iter().map(|(id, conn)| (id.to_string(), Arc::clone(&conn))).collect()
+            connectors
+                .iter()
+                .map(|(id, conn)| (id.to_string(), Arc::clone(&conn)))
+                .collect()
         };
         for (id, connector) in connector_handles {
             tracing::info!("indexing connector {}", id);
-            match connector.list_entries("").await {
+            let entries = match connector.list_entries("").await {
                 Ok(entries) => {
-                    tracing::info!("connector {} listed {} entries", id, entries.len());
-                    remote_batches.push((id, entries));
+                    if entries.len() > self.cloud_index_limit {
+                        tracing::info!(
+                            "connector {} entries truncated from {} to {}",
+                            id,
+                            entries.len(),
+                            self.cloud_index_limit
+                        );
+                    }
+                    entries
+                        .into_iter()
+                        .take(self.cloud_index_limit)
+                        .collect::<Vec<_>>()
                 }
                 Err(e) => {
                     tracing::warn!("connector {} list failed: {}", id, e);
+                    continue;
                 }
+            };
+            tracing::info!("connector {} listed {} entries", id, entries.len());
+
+            // Remove stale semantic records for this source type before reindexing.
+            if let Err(e) = self
+                .store
+                .delete_by_source_type(connector.source_type())
+                .await
+            {
+                tracing::warn!(
+                    "failed to delete old semantic records for {}: {}",
+                    connector.source_type(),
+                    e
+                );
+            }
+
+            // Build the lightweight metadata index once per connector.
+            {
+                let mut index = self
+                    .file_index
+                    .lock()
+                    .map_err(|e| anyhow::anyhow!("failed to lock file index: {}", e))?;
+                index.index_remote_entries(&id, entries.clone());
+            }
+
+            // Embed and upsert in batches so memory stays within the configured
+            // budget regardless of how many entries the connector returns.
+            let batch_size = self.index_batch_size;
+            for chunk in entries.chunks(batch_size) {
+                self.index_remote_chunk(chunk, connector.source_type())
+                    .await?;
             }
         }
 
         {
-            let mut index = self
+            let index = self
                 .file_index
                 .lock()
                 .map_err(|e| anyhow::anyhow!("failed to lock file index: {}", e))?;
-            for (id, entries) in remote_batches {
-                index.index_remote_entries(&id, entries);
-            }
             Ok(index.count())
         }
+    }
+
+    /// Embed and upsert one chunk of remote entries into LanceDB.
+    async fn index_remote_chunk(&self, chunk: &[RemoteEntry], source_type: &str) -> Result<()> {
+        let texts: Vec<String> = chunk
+            .iter()
+            .map(|e| format!("{} {}", e.name, e.path))
+            .collect();
+
+        let vectors = tokio::task::spawn_blocking({
+            let embedder = Arc::clone(&self.embedder);
+            let budget = self.memory_budget_mb;
+            move || embedder.embed_texts_batched(&texts, budget)
+        })
+        .await
+        .context("embedding task panicked")?;
+
+        match vectors {
+            Ok(vectors) => {
+                let records: Vec<Record> = chunk
+                    .iter()
+                    .zip(vectors.into_iter())
+                    .map(|(entry, vector)| Record {
+                        id: entry.id.clone(),
+                        relative_path: entry.path.clone(),
+                        source_type: source_type.to_string(),
+                        vector: downsample_vector(&vector, self.vector_dim),
+                        updated_at: entry
+                            .modified
+                            .clone()
+                            .unwrap_or_else(|| Utc::now().to_rfc3339()),
+                        version: 1,
+                    })
+                    .collect();
+
+                self.store
+                    .upsert_batched(records, self.index_batch_size)
+                    .await
+                    .context("failed to upsert remote chunk")?;
+            }
+            Err(e) => {
+                tracing::warn!("failed to embed remote chunk for {}: {}", source_type, e);
+            }
+        }
+        Ok(())
     }
 
     /// Refresh the OS application index.
@@ -163,7 +259,9 @@ impl UnifiedSearch {
             if tier_order != std::cmp::Ordering::Equal {
                 return tier_order;
             }
-            b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal)
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         results.truncate(top_k);
@@ -223,7 +321,11 @@ impl UnifiedSearch {
     }
 
     /// Download a cloud result to a local path. For local files this copies the file.
-    pub async fn download_result(&self, result: &SearchResult, dest: &std::path::Path) -> Result<()> {
+    pub async fn download_result(
+        &self,
+        result: &SearchResult,
+        dest: &std::path::Path,
+    ) -> Result<()> {
         if result.source_type == "local" || result.source_type == "app" {
             let src = std::path::PathBuf::from(&result.relative_path);
             if src.exists() {
@@ -318,8 +420,15 @@ mod tests {
     #[tokio::test]
     async fn file_matches_rank_above_semantic_matches() {
         let tmp = TempDir::new().unwrap();
+
+        // Create a local file whose name matches the query.
+        let root = tmp.path().join("root");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::File::create(root.join("budget.xlsx")).unwrap();
+
         let cfg = crate::config::DaemonConfig {
             data_dir: tmp.path().to_path_buf(),
+            roots: vec![root.clone()],
             ..Default::default()
         };
         let store = Arc::new(LanceDbStore::open(&cfg).await.unwrap());
@@ -331,16 +440,10 @@ mod tests {
             .await
             .unwrap();
 
-        // Create a local file whose name matches the query.
-        let root = tmp.path().join("root");
-        std::fs::create_dir(&root).unwrap();
-        std::fs::File::create(root.join("budget.xlsx")).unwrap();
-
         let search = UnifiedSearch::new(
             store,
             embedder,
-            vec![root],
-            vec![],
+            &cfg,
             crate::connectors::ConnectorRegistry::empty(),
         );
         search.index_files().await.unwrap();

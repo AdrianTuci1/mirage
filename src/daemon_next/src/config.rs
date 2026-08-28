@@ -43,6 +43,15 @@ pub struct DaemonConfig {
     pub excluded_dirs: Vec<String>,
     /// Cloud / network source connectors configured for metadata indexing.
     pub connectors: Vec<ConnectorConfig>,
+    /// Approximate memory budget for indexing in megabytes. Used to size batches.
+    pub memory_budget_mb: usize,
+    /// Maximum number of records to embed and upsert in one batch.
+    pub index_batch_size: usize,
+    /// Maximum cloud entries to index per connector to avoid unbounded memory use.
+    pub cloud_index_limit: usize,
+    /// Target vector dimension. Vectors produced by the embedder are downsampled
+    /// or padded to this dimension before being stored.
+    pub vector_dim: usize,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -128,6 +137,10 @@ impl Default for DaemonConfig {
                 ".cache".to_string(),
             ],
             connectors: Vec::new(),
+            memory_budget_mb: 3072,
+            index_batch_size: 1024,
+            cloud_index_limit: 10000,
+            vector_dim: 384,
         }
     }
 }
@@ -154,23 +167,35 @@ impl DaemonConfig {
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("failed to create config directory {}", parent.display()))?;
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create config directory {}", parent.display())
+            })?;
         }
-        let contents = serde_yaml::to_string(self)
-            .context("failed to serialize config to YAML")?;
+        let contents = serde_yaml::to_string(self).context("failed to serialize config to YAML")?;
         std::fs::write(path, contents)
             .with_context(|| format!("failed to write config to {}", path.display()))?;
         Ok(())
     }
 
     pub fn ensure_dirs(&self) -> Result<()> {
-        std::fs::create_dir_all(&self.data_dir)
-            .with_context(|| format!("failed to create data directory {}", self.data_dir.display()))?;
-        std::fs::create_dir_all(&self.models_dir)
-            .with_context(|| format!("failed to create models directory {}", self.models_dir.display()))?;
-        std::fs::create_dir_all(&self.downloads_dir)
-            .with_context(|| format!("failed to create downloads directory {}", self.downloads_dir.display()))?;
+        std::fs::create_dir_all(&self.data_dir).with_context(|| {
+            format!(
+                "failed to create data directory {}",
+                self.data_dir.display()
+            )
+        })?;
+        std::fs::create_dir_all(&self.models_dir).with_context(|| {
+            format!(
+                "failed to create models directory {}",
+                self.models_dir.display()
+            )
+        })?;
+        std::fs::create_dir_all(&self.downloads_dir).with_context(|| {
+            format!(
+                "failed to create downloads directory {}",
+                self.downloads_dir.display()
+            )
+        })?;
         Ok(())
     }
 }
