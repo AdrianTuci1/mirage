@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -38,6 +39,11 @@ struct DownloadRequest {
     dest_path: String,
     #[serde(default)]
     open_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateConnectorsRequest {
+    connectors: Vec<crate::config::ConnectorConfig>,
 }
 
 impl Default for SearchRequest {
@@ -85,6 +91,8 @@ struct ModuleIdRequest {
 
 pub struct IpcServer {
     handlers: HashMap<String, MethodHandler>,
+    config_path: std::path::PathBuf,
+    config: DaemonConfig,
 }
 
 impl IpcServer {
@@ -95,9 +103,13 @@ impl IpcServer {
         module_manager: Arc<ModuleManager>,
         slm: Arc<dyn SlmEngine>,
         search: Arc<UnifiedSearch>,
+        config_path: std::path::PathBuf,
+        config: DaemonConfig,
     ) -> Self {
         let mut server = Self {
             handlers: HashMap::new(),
+            config_path,
+            config,
         };
 
         server.register("ping", |_params| Box::pin(async { Ok(json!("pong")) }));
@@ -218,6 +230,33 @@ impl IpcServer {
                     })?;
 
                 Ok(json!({ "dest_path": dest.to_string_lossy() }))
+            })
+        });
+
+        let update_search = Arc::clone(&search);
+        let update_config_path = server.config_path.clone();
+        server.register("update_connectors", move |params: Value| {
+            let search = Arc::clone(&update_search);
+            let config_path = update_config_path.clone();
+            Box::pin(async move {
+                let request: UpdateConnectorsRequest = serde_json::from_value(params).map_err(|e| {
+                    JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                        format!("invalid update_connectors params: {}", e),
+                    )
+                })?;
+
+                let count = search
+                    .update_connectors(request.connectors, &config_path)
+                    .await
+                    .map_err(|e| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            format!("update_connectors failed: {}", e),
+                        )
+                    })?;
+
+                Ok(json!({ "count": count }))
             })
         });
 
@@ -544,8 +583,9 @@ impl IpcServer {
         self.handlers.insert(method.into(), handler);
     }
 
-    pub async fn run(self, config: &DaemonConfig) -> Result<()> {
+    pub async fn run(self) -> Result<()> {
         let this = Arc::new(self);
+        let config = this.config.clone();
 
         #[cfg(unix)]
         {

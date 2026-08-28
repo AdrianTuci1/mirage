@@ -26,9 +26,9 @@ impl FileWatcher {
         let mut debouncer = new_debouncer(
             Duration::from_secs(2),
             None,
-            move |res: Result<Vec<notify_debouncer_full::DebouncedEvent>, Vec<Box<dyn std::error::Error + Send + Sync>>>| {
+            move |res: Result<Vec<notify_debouncer_full::DebouncedEvent>, Vec<notify_debouncer_full::notify::Error>>| {
                 if let Ok(events) = res {
-                    if events.iter().any(|e| matches!(e.kind, notify_debouncer_full::DebouncedEventKind::Any)) {
+                    if !events.is_empty() {
                         let _ = tx.send(());
                     }
                 }
@@ -37,7 +37,7 @@ impl FileWatcher {
 
         for root in roots {
             if root.exists() {
-                debouncer.watcher().watch(&root, RecursiveMode::Recursive).ok();
+                debouncer.watch(&root, RecursiveMode::Recursive).ok();
             }
         }
 

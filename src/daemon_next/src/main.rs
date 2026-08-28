@@ -117,11 +117,10 @@ async fn main() -> Result<()> {
         tracing::warn!("failed to start file watcher");
     }
 
-    let server = IpcServer::new(store, embedder, analytics, module_manager, slm, unified_search);
-    let config_for_server = config.clone();
+    let server = IpcServer::new(store, embedder, analytics, module_manager, slm, unified_search, config_path.clone(), config.clone());
 
     let server_handle = tokio::spawn(async move {
-        server.run(&config_for_server).await
+        server.run().await
     });
 
     tokio::select! {

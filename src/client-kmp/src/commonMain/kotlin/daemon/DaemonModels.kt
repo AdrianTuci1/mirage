@@ -82,3 +82,45 @@ data class DownloadFileResponse(
     @SerialName("dest_path")
     val destPath: String
 )
+
+@Serializable
+enum class ConnectorKind {
+    @SerialName("s3") S3,
+    @SerialName("dropbox") DROPBOX,
+    @SerialName("google_drive") GOOGLE_DRIVE,
+    @SerialName("smb") SMB
+}
+
+@Serializable
+data class ConnectorCredentials(
+    @SerialName("access_key") val accessKey: String? = null,
+    @SerialName("secret_key") val secretKey: String? = null,
+    @SerialName("region") val region: String? = null,
+    @SerialName("endpoint") val endpoint: String? = null,
+    @SerialName("bucket") val bucket: String? = null,
+    @SerialName("oauth_token") val oauthToken: String? = null,
+    @SerialName("username") val username: String? = null,
+    @SerialName("password") val password: String? = null,
+    @SerialName("host") val host: String? = null,
+    @SerialName("share") val share: String? = null
+)
+
+@Serializable
+data class ConnectorConfig(
+    val id: String,
+    val name: String,
+    @SerialName("kind") val kind: ConnectorKind,
+    val enabled: Boolean = true,
+    val roots: List<String> = emptyList(),
+    val credentials: ConnectorCredentials = ConnectorCredentials()
+)
+
+@Serializable
+data class UpdateConnectorsRequest(
+    val connectors: List<ConnectorConfig>
+)
+
+@Serializable
+data class IndexCountResponse2(
+    @SerialName("count") val count: Int
+)

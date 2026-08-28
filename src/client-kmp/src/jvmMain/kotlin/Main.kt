@@ -55,6 +55,7 @@ fun main() = application {
     var indexedCount by remember { mutableStateOf(0) }
     var indexingProgress by remember { mutableStateOf<Float?>(null) }
     val modules = remember { mutableStateListOf<ModuleStatus>() }
+    val connectors = remember { mutableStateListOf<DaemonModels.ConnectorConfig>() }
 
     val socketPath = System.getProperty("user.home") + "/.mirage/mirage.sock"
     val dataDir = System.getProperty("user.home") + "/.mirage/data"
@@ -219,6 +220,18 @@ fun main() = application {
     if (isSettingsVisible) {
         SettingsWindow(
             servers = connectedServers,
+            connectors = connectors,
+            onConnectorsChange = { updated ->
+                connectors.clear()
+                connectors.addAll(updated)
+                scope.launch {
+                    try {
+                        indexedCount = daemonClient?.updateConnectors(updated) ?: 0
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            },
             onAddServer = { isAddServerVisible = true },
             onClose = { isSettingsVisible = false },
             onQuit = ::exitApplication

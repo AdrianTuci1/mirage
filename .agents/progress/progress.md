@@ -3,8 +3,9 @@
 ## Stare curentă
 
 - **Data ultimei actualizări:** 2026-08-28
-- **Faza curentă:** Local standalone MVP — funcționalități locale implementate; rămân configuratorul de conectori și setup wizard.
-- **Progres general:** ~92% pentru funcționalitatea locală standalone
+- **Faza curentă:** Local standalone MVP — funcționalități locale implementate; rămân configuratorul de conectori și indicatorul vizual din footer.
+- **Progres general:** ~93% pentru funcționalitatea locală standalone
+- **Wizard/onboarding:** exclus momentan; modulele se gestionează direct din Settings sau din indicatorul de stare.
 
 ## Ce funcționează local (finalizat)
 
@@ -25,8 +26,26 @@
 | Task | Prioritate | Note |
 |------|------------|------|
 | Config conectori din UI | 🔴 ridicată | Form-uri pentru S3/Dropbox/GDrive/SMB în Settings; momentan se editează `daemon.yaml` |
-| Setup wizard / onboarding | 🟡 medie | Descărcare modele/motoare la prima pornire |
+| Footer index/module status indicator | 🟡 medie | Design finalizat; implementare vizuală în KMP rămâne |
 | Refactor DuckDB/ONNX ca module descărcabile | 🟢 scăzută | Funcționează built-in, dar obiectivul final e modular |
+
+## Ce este exclus momentan
+
+- **Onboarding / setup wizard:** va fi simplu și este exclus din sprintul curent. Descărcarea modelelor/motoarelor se va face direct din Settings → Modules sau prin indicatorul din footer.
+- **Progres barul inițial din Spotlight:** va apărea doar sub index status la pornire, se poate închide, iar după finalizare dispare. Locul permanent este footerul din stânga.
+
+## Design indicator indexare/module (footer)
+
+Indicatorul de indexare/module se mută permanent în **footerul din stânga** al ferestrei Spotlight, sub forma unui cerc gol pe interior (doar outline). Stările vizuale:
+
+- **Neindexat:** cerc gri, procent 0%.
+- **Parțial:** outline galben care se completează progresiv; procent afișat lângă cerc.
+- **Complet:** cerc verde plin; 100%.
+- **Conectat:** în interiorul cercului parțial apar icon-uri suprapuse pentru sursele conectate (network volume, Dropbox, Google Drive, SMB etc.).
+
+Click pe cerc deschide Settings la tabul de indexare/conectori. Sub cerc (sau direct în Settings dacă footerul este închis) apar modelele/motoarele cu switch-uri (unele active by default).
+
+La pornire, în zona de sub bara de căutare (Spotlight) poate apărea un progress bar temporar pentru indexare; acesta dispare când indexarea e gata și poate fi închis manual.
 
 ## Cum se face packaging
 

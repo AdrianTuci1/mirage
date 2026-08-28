@@ -24,3 +24,4 @@ pub use embeddings::{create_embedder, Embedder};
 pub use ipc::IpcServer;
 pub use modules::{ModuleEvent, ModuleManager, ModuleStatus};
 pub use slm::{AskResponse, HeuristicSlmEngine, OnnxSlmEngine, SlmEngine};
+pub use watcher::FileWatcher;

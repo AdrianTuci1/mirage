@@ -20,7 +20,7 @@ pub struct UnifiedSearch {
     app_index: Mutex<AppIndex>,
     roots: Vec<PathBuf>,
     excluded_dirs: Vec<String>,
-    connectors: Arc<ConnectorRegistry>,
+    connectors: Arc<std::sync::Mutex<ConnectorRegistry>>,
 }
 
 impl UnifiedSearch {
@@ -38,7 +38,7 @@ impl UnifiedSearch {
             app_index: Mutex::new(AppIndex::new()),
             roots,
             excluded_dirs,
-            connectors: Arc::new(connectors),
+            connectors: Arc::new(std::sync::Mutex::new(connectors)),
         }
     }
 
@@ -56,15 +56,19 @@ impl UnifiedSearch {
             index.index_roots(&self.roots, &self.excluded_dirs);
         }
 
-        // Index configured cloud sources by metadata only. Collect entries
-        // without holding the lock across await points.
+        // Index configured cloud sources by metadata only. Collect connector
+        // handles without holding the lock across await points.
         let mut remote_batches: Vec<(String, Vec<crate::connectors::RemoteEntry>)> = Vec::new();
-        for (id, connector) in self.connectors.iter() {
+        let connector_handles: Vec<(String, std::sync::Arc<dyn crate::connectors::CloudConnector>)> = {
+            let connectors = self.connectors.lock().unwrap();
+            connectors.iter().map(|(id, conn)| (id.to_string(), Arc::clone(&conn))).collect()
+        };
+        for (id, connector) in connector_handles {
             tracing::info!("indexing connector {}", id);
             match connector.list_entries("").await {
                 Ok(entries) => {
                     tracing::info!("connector {} listed {} entries", id, entries.len());
-                    remote_batches.push((id.to_string(), entries));
+                    remote_batches.push((id, entries));
                 }
                 Err(e) => {
                     tracing::warn!("connector {} list failed: {}", id, e);
@@ -174,6 +178,25 @@ impl UnifiedSearch {
         Ok(index.count())
     }
 
+    /// Replace the configured connectors, persist them to disk and reindex.
+    pub async fn update_connectors(
+        &self,
+        configs: Vec<crate::config::ConnectorConfig>,
+        config_path: &std::path::Path,
+    ) -> Result<usize> {
+        let mut config = crate::config::DaemonConfig::load(config_path)?;
+        config.connectors = configs;
+        config.save(config_path)?;
+
+        let registry = crate::connectors::registry_from_config(&config.connectors);
+        {
+            let mut guard = self.connectors.lock().unwrap();
+            *guard = registry;
+        }
+
+        self.index_files().await
+    }
+
     /// Download a cloud result to a local path. For local files this copies the file.
     pub async fn download_result(&self, result: &SearchResult, dest: &std::path::Path) -> Result<()> {
         if result.source_type == "local" || result.source_type == "app" {
@@ -185,10 +208,12 @@ impl UnifiedSearch {
             anyhow::bail!("local file not found: {}", result.relative_path);
         }
 
-        let connector = self
-            .connectors
-            .get(&result.source_type)
-            .with_context(|| format!("connector {} not found", result.source_type))?;
+        let connector = {
+            let connectors = self.connectors.lock().unwrap();
+            connectors
+                .get(&result.source_type)
+                .with_context(|| format!("connector {} not found", result.source_type))?
+        };
         let name = result
             .relative_path
             .split('/')

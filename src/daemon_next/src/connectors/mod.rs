@@ -3,6 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 
 /// Metadata for a single object known to a connector.
 #[derive(Debug, Clone)]
@@ -70,14 +71,14 @@ pub fn build_connector(config: &ConnectorConfig) -> Result<Box<dyn CloudConnecto
 
 /// Create a connector registry from the daemon configuration.
 pub fn registry_from_config(configs: &[ConnectorConfig]) -> ConnectorRegistry {
-    let mut map: HashMap<String, Box<dyn CloudConnector>> = HashMap::new();
+    let mut map: HashMap<String, Arc<dyn CloudConnector>> = HashMap::new();
     for cfg in configs {
         if !cfg.enabled {
             continue;
         }
         match build_connector(cfg) {
             Ok(conn) => {
-                map.insert(cfg.id.clone(), conn);
+                map.insert(cfg.id.clone(), Arc::from(conn));
             }
             Err(e) => {
                 tracing::warn!("failed to build connector {}: {}", cfg.id, e);
@@ -87,19 +88,19 @@ pub fn registry_from_config(configs: &[ConnectorConfig]) -> ConnectorRegistry {
     ConnectorRegistry(map)
 }
 
-pub struct ConnectorRegistry(HashMap<String, Box<dyn CloudConnector>>);
+pub struct ConnectorRegistry(HashMap<String, Arc<dyn CloudConnector>>);
 
 impl ConnectorRegistry {
     pub fn empty() -> Self {
         Self(HashMap::new())
     }
 
-    pub fn get(&self, id: &str) -> Option<&dyn CloudConnector> {
-        self.0.get(id).map(|b| b.as_ref())
+    pub fn get(&self, id: &str) -> Option<Arc<dyn CloudConnector>> {
+        self.0.get(id).cloned()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &dyn CloudConnector)> {
-        self.0.iter().map(|(k, v)| (k, v.as_ref()))
+    pub fn iter(&self) -> impl Iterator<Item = (&String, Arc<dyn CloudConnector>)> {
+        self.0.iter().map(|(k, v)| (k, Arc::clone(v)))
     }
 }
 

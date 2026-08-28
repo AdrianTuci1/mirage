@@ -105,6 +105,13 @@ class DaemonClient(
         json.decodeFromJsonElement(DaemonModels.DownloadFileResponse.serializer(), response)
     }
 
+    suspend fun updateConnectors(connectors: List<DaemonModels.ConnectorConfig>): Int = withContext(Dispatchers.IO) {
+        val request = DaemonModels.UpdateConnectorsRequest(connectors)
+        val params = json.encodeToJsonElement(DaemonModels.UpdateConnectorsRequest.serializer(), request)
+        val response = call("update_connectors", params)
+        json.decodeFromJsonElement(DaemonModels.IndexCountResponse2.serializer(), response).count
+    }
+
     private fun call(method: String, params: JsonElement?): JsonElement {
         val request = JsonRpcRequest(
             id = nextId.getAndIncrement(),
