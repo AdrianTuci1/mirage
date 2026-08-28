@@ -73,7 +73,7 @@ Daemonul și CLI-ul sunt copiate în `src/client-kmp/package-resources/{macos,wi
 
 ## Commit-uri recente
 
-- (in lucru) — footer indicator cu cerc de progres + filtre surse și RPC `list_connectors`.
+- `38cf5ad` — footer indicator cu cerc de progres + filtre surse și RPC `list_connectors`.
 - `3a84d97` — configurator conectori în Settings + fixuri compilare daemon (watcher, PathBuf, Arc connectors).
 - `907ffb9` — packaging scripts, file watcher, explicit cloud download.
 - `df0fa5f` — implementare conectori S3/R2, Dropbox, GDrive, SMB.
