@@ -366,6 +366,10 @@ Vectorii produși de fallback au aceeași dimensiune (384) ca cei ONNX, deci sch
 > link-time (rustc scrie `LC_LOAD_DYLIB` în executabil), deci variabilele de mediu setate la runtime nu schimbă nimic, iar §9.4 recunoaște
 > aceeași limitare pe macOS. Implementarea aleasă este binarul DuckDB CLI descărcat ca modul `runtime` și rulat ca proces copil: vezi
 > ADR 014 și `src/daemon_next/src/analytics.rs`. Textul de mai jos rămâne ca istoric al analizei.
+>
+> **ONNX, spre deosebire de DuckDB, chiar folosește încărcarea dinamică:** crate-ul `ort` e compilat cu feature-ul `load-dynamic`
+> (echivalentul `libloading` din §9), modulul `onnx_runtime` descarcă biblioteca partajată, iar daemonul setează `ORT_DYLIB_PATH` la ea —
+> deci partea de încărcare dinamică a acestui doc se aplică și s-a implementat pentru ONNX.
 
 ### 9.1 Layout așteptat
 

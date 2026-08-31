@@ -138,6 +138,7 @@ Worker / Local Indexer → LanceDB / Parquet → Delta → Daemon → Local stor
 
 - **Daemon + IPC**: GUI și CLI sunt clienți, nu rulează interogări.
 - **DuckDB**: motor OLAP descărcabil, rulat ca proces separat al daemonului (ADR 014); nu e legat în binar.
+- **ONNX Runtime**: motor de inferență descărcabil (modul `onnx_runtime`, v1.28.0); `ort` e compilat cu `load-dynamic` și încarcă biblioteca la runtime prin `ORT_DYLIB_PATH`, deci nu e legat în binar.
 - **Rust pentru daemon**: performanță maximă și acces nativ la SIMD.
 - **MCP**: integrare standard cu agenți AI.
 - **Wizard modular**: utilizatorul controlează ce module și modele activează.

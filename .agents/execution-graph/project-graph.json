@@ -778,9 +778,10 @@
         "T13.2"
       ],
       "outputs": [
-        "src/daemon/src/modules/onnx_engine.rs"
+        "src/daemon_next/src/embeddings.rs",
+        "src/daemon_next/src/modules/catalog.rs"
       ],
-      "notes": "ONNX Runtime loaded from downloads dir; embed/search uses fallback if missing or prompts download. Design: .agents/specs/optional-engine-refactor.md §10."
+      "notes": "ONNX Runtime descarcabil prin modulul 'onnx_runtime' (v1.28.0, sha256 reali pe 4 platforme): crate-ul 'ort' e compilat cu 'load-dynamic', create_embedder localizeaza biblioteca in downloads_dir si seteaza ORT_DYLIB_PATH; fara modul, embedder-ul cade pe fallback determinist. Design: .agents/specs/optional-engine-refactor.md §9."
     },
     {
       "id": "T13.5",

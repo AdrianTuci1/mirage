@@ -209,10 +209,13 @@ cfg_if::cfg_if! {
 
         /// Factory that chooses between the CLIP text-image space, a single ONNX
         /// text model and the deterministic fallback, based on what `models_dir` holds.
-        pub fn create_embedder(models_dir: impl AsRef<Path>) -> Result<Arc<dyn Embedder>> {
+        pub fn create_embedder(
+            models_dir: impl AsRef<Path>,
+            downloads_dir: impl AsRef<Path>,
+        ) -> Result<Arc<dyn Embedder>> {
             let models_dir = models_dir.as_ref();
             // If the onnx_runtime module was downloaded, point ort at the shared library.
-            if let Some(runtime_path) = module_runtime_dylib("onnx_runtime") {
+            if let Some(runtime_path) = module_runtime_dylib(downloads_dir.as_ref(), "onnx_runtime") {
                 let path_str = runtime_path.to_string_lossy().to_string();
                 std::env::set_var("ORT_DYLIB_PATH", &path_str);
                 tracing::info!("using downloaded ONNX Runtime library at {}", path_str);
@@ -613,30 +616,44 @@ cfg_if::cfg_if! {
 
         /// Look for the downloaded ONNX Runtime shared library in the module install
         /// directory, which is `<downloads_dir>/<module_id>/<version>/`.
-        fn module_runtime_dylib(module_id: &str) -> Option<PathBuf> {
-            let base = std::env::var("MIRAGE_DOWNLOADS_DIR")
+        fn module_runtime_dylib(
+            config_downloads_dir: &Path,
+            module_id: &str,
+        ) -> Option<PathBuf> {
+            // `MIRAGE_DOWNLOADS_DIR` overrides the daemon's configured directory,
+            // for tests and development machines that stage the module elsewhere.
+            let base = std::env::var_os("MIRAGE_DOWNLOADS_DIR")
                 .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from("downloads"));
+                .unwrap_or_else(|| config_downloads_dir.to_path_buf());
             let dir = base.join(module_id);
             if !dir.is_dir() {
                 return None;
             }
-            let lib_name = if cfg!(target_os = "windows") {
-                String::from("onnxruntime.dll")
-            } else if cfg!(target_os = "macos") {
-                String::from("libonnxruntime.dylib")
-            } else {
-                String::from("libonnxruntime.so")
+            // The archive only materialises the versioned `.so` on Linux; the
+            // `libonnxruntime.so` symlinks are not extracted, so match by prefix.
+            let is_lib = |p: &PathBuf| {
+                let name = p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                if cfg!(target_os = "windows") {
+                    name == "onnxruntime.dll"
+                } else if cfg!(target_os = "macos") {
+                    name == "libonnxruntime.dylib"
+                } else {
+                    name.starts_with("libonnxruntime.so")
+                }
             };
-            list_files(&dir)
-                .into_iter()
-                .find(|p| p.file_name().map(|n| n.to_string_lossy() == lib_name).unwrap_or(false))
+            list_files(&dir).into_iter().find(|p| is_lib(p))
         }
     } else {
         /// Factory that always returns the deterministic fallback embedder when the `onnx`
         /// feature is disabled. The ONNX Runtime module can still be downloaded, but it cannot
         /// be used until the daemon is rebuilt with the `onnx` feature.
-        pub fn create_embedder(_models_dir: impl AsRef<Path>) -> Result<Arc<dyn Embedder>> {
+        pub fn create_embedder(
+            _models_dir: impl AsRef<Path>,
+            _downloads_dir: impl AsRef<Path>,
+        ) -> Result<Arc<dyn Embedder>> {
             Ok(Arc::new(FallbackEmbedder::new(DEFAULT_EMBEDDING_DIM)))
         }
     }

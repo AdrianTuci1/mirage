@@ -100,14 +100,58 @@ pub const DUCKDB_MODULE_VERSION: &str = "1.5.5";
 /// Release tag the download URLs are pinned to.
 pub const DUCKDB_RELEASE_TAG: &str = "v1.5.5";
 
+/// Version of the downloadable ONNX Runtime module, as it appears in the module path.
+pub const ONNX_RUNTIME_MODULE_VERSION: &str = "1.28.0";
+
+/// Release tag the ONNX Runtime download URLs are pinned to.
+pub const ONNX_RUNTIME_RELEASE_TAG: &str = "v1.28.0";
+
+/// The downloadable ONNX Runtime shared library, per platform.
+///
+/// The daemon loads it at runtime through `ORT_DYLIB_PATH` rather than linking
+/// it (`ort/load-dynamic`), so `size`/`checksum` are the archive Microsoft
+/// publishes and `file_sha256` is the library file inside it. On Linux the
+/// archive only contains the versioned `.so.1.28.0` as a real file — the
+/// `libonnxruntime.so` symlinks are not extracted, which is why the manifest
+/// names the versioned file.
+fn onnx_runtime_entry(
+    platforms: &mut HashMap<String, PlatformEntry>,
+    key: &str,
+    asset: &str,
+    format: crate::modules::manifest::ArchiveFormat,
+    size: u64,
+    checksum: &str,
+    file_path: &str,
+    file_sha256: &str,
+) {
+    use crate::modules::manifest::FileEntry;
+    platforms.insert(
+        key.to_string(),
+        PlatformEntry {
+            url: format!(
+                "https://github.com/microsoft/onnxruntime/releases/download/{ONNX_RUNTIME_RELEASE_TAG}/{asset}"
+            ),
+            size,
+            checksum: checksum.to_string(),
+            archive_format: format,
+            files: vec![FileEntry {
+                relative_path: file_path.to_string(),
+                sha256: file_sha256.to_string(),
+                executable: false,
+                required: true,
+            }],
+        },
+    );
+}
+
 /// Built-in catalog of the on-device models that make search work.
 ///
 /// Every entry is a real, publicly hosted artifact pinned by SHA-256, so a
-/// download either verifies or fails loudly. The ONNX Runtime entry that used to
-/// live here is gone: this build links it (`ort/download-binaries`) and its URL
-/// was a placeholder that never worked. DuckDB is *not* linked any more — the
-/// tabular feature downloads the official command-line binary below and runs it
-/// as the [`crate::analytics::Analytics`] engine.
+/// download either verifies or fails loudly. The DuckDB and ONNX Runtime engines
+/// are *not* linked into the daemon any more: they are downloaded as modules and
+/// used as a subprocess / runtime-loaded library, so the `ort` crate is built
+/// with `load-dynamic` and points at this module's library through
+/// `ORT_DYLIB_PATH`.
 pub fn default_catalog() -> Catalog {
     use crate::modules::manifest::ModuleKind;
 
@@ -247,6 +291,65 @@ pub fn default_catalog() -> Catalog {
         platforms: duckdb_platforms,
     };
 
+    // The shared library the CLIP encoders load at runtime: the official
+    // ONNX Runtime, which the daemon no longer links (`ort/load-dynamic`).
+    // macOS x64 is not published by ONNX Runtime 1.28, so the catalog offers
+    // the four platforms that have a real asset.
+    let mut onnx_platforms: HashMap<String, PlatformEntry> = HashMap::new();
+    onnx_runtime_entry(
+        &mut onnx_platforms,
+        "macos_aarch64",
+        "onnxruntime-osx-arm64-1.28.0.tgz",
+        crate::modules::manifest::ArchiveFormat::TarGz,
+        32_396_562,
+        "1268b359718099bde2cedb55787f182a130067bc4f31e8c88478c445b850d3d8",
+        "onnxruntime-osx-arm64-1.28.0/lib/libonnxruntime.dylib",
+        "dc19bbcb2f5c9fb3c68b4f9248aa0a35065ff702c5dbeae75eac54a74da97b6d",
+    );
+    onnx_runtime_entry(
+        &mut onnx_platforms,
+        "linux_x86_64",
+        "onnxruntime-linux-x64-1.28.0.tgz",
+        crate::modules::manifest::ArchiveFormat::TarGz,
+        9_125_960,
+        "a3e1b79d7bb1bf09696ce675f49e4064e6c81f6202b8225624fff0e93f8d6407",
+        "onnxruntime-linux-x64-1.28.0/lib/libonnxruntime.so.1.28.0",
+        "1461ef7cc3d9e49982591721683cc3e3a55580aeca9a5254e7aac47b75ee4bab",
+    );
+    onnx_runtime_entry(
+        &mut onnx_platforms,
+        "linux_aarch64",
+        "onnxruntime-linux-aarch64-1.28.0.tgz",
+        crate::modules::manifest::ArchiveFormat::TarGz,
+        8_116_278,
+        "e15ff8b5d85afe6c144d97c6fd432254bf76a219daaf17658087d6ecb3e8f0bb",
+        "onnxruntime-linux-aarch64-1.28.0/lib/libonnxruntime.so.1.28.0",
+        "f1ec1a08eb99bd6e5401340f0a2b101381bf4694415480291dc13bcaa30f9ec7",
+    );
+    onnx_runtime_entry(
+        &mut onnx_platforms,
+        "windows_x86_64",
+        "onnxruntime-win-x64-1.28.0.zip",
+        crate::modules::manifest::ArchiveFormat::Zip,
+        78_796_801,
+        "abef733dacbe2f571547a7150b479b5cb9cc0df22f96c24983a42cadb1b4f8bc",
+        "onnxruntime-win-x64-1.28.0/lib/onnxruntime.dll",
+        "18370c375f07357fa5874344a9d9ac17e6b6fe1eb18b1dd209d79483b4470257",
+    );
+    let onnx_runtime = ModuleManifest {
+        id: String::from("onnx_runtime"),
+        name: String::from("ONNX Runtime (CLIP)"),
+        version: String::from(ONNX_RUNTIME_MODULE_VERSION),
+        description: String::from(
+            "Shared library the CLIP text and vision encoders load at runtime for semantic search.",
+        ),
+        kind: ModuleKind::Runtime,
+        license: String::from("MIT"),
+        is_optional: true,
+        dependencies: vec![],
+        platforms: onnx_platforms,
+    };
+
     Catalog {
         schema_version: String::from("1.0.0"),
         catalog_version: String::from("builtin"),
@@ -256,7 +359,7 @@ pub fn default_catalog() -> Catalog {
             public_key_fingerprint: String::from("builtin"),
             signature: String::from("builtin"),
         },
-        modules: vec![clip_text, clip_vision, clip_tokenizer, duckdb],
+        modules: vec![clip_text, clip_vision, clip_tokenizer, duckdb, onnx_runtime],
     }
 }
 
@@ -393,5 +496,37 @@ mod tests {
                 platform.url
             );
         }
+    }
+
+    #[test]
+    fn onnx_runtime_is_a_downloadable_runtime_library() {
+        let catalog = default_catalog();
+        let onnx = catalog
+            .find_module("onnx_runtime")
+            .expect("the catalog must offer the ONNX Runtime");
+        assert_eq!(onnx.kind, ModuleKind::Runtime);
+        assert!(onnx.is_optional, "search falls back without the runtime");
+        assert_eq!(onnx.version, ONNX_RUNTIME_MODULE_VERSION);
+
+        let host = onnx
+            .platform_for_current_target()
+            .expect("the host platform must have an ONNX Runtime build");
+        assert_eq!(host.files.len(), 1);
+        let lib = &host.files[0];
+        assert!(!lib.executable, "a shared library is not run directly");
+        assert_ne!(
+            lib.sha256, host.checksum,
+            "the archive and the library inside cannot share a checksum"
+        );
+        for platform in onnx.platforms.values() {
+            assert!(
+                platform.url.contains(ONNX_RUNTIME_RELEASE_TAG),
+                "url {} is not pinned to a release",
+                platform.url
+            );
+        }
+        // ONNX Runtime 1.28 publishes no macOS x64 asset, so the catalog cannot
+        // offer it and the daemon cannot build for that target with `load-dynamic`.
+        assert!(!onnx.platforms.contains_key("macos_x86_64"));
     }
 }

@@ -118,20 +118,7 @@ impl ModuleManager {
         if let Some(ref catalog) = catalog_for_sync {
             Arc::clone(&inner).sync_catalog_to_state(catalog).await;
             inner.reconcile_duckdb_engine(catalog).await;
-
-            #[cfg(feature = "onnx")]
-            if let Some(manifest) = catalog.find_module("onnx_runtime") {
-                inner
-                    .set_state(
-                        "onnx_runtime",
-                        ModuleState::Ready,
-                        Some(manifest.version.clone()),
-                        0,
-                        0,
-                        None,
-                    )
-                    .await;
-            }
+            inner.reconcile_onnx_runtime(catalog).await;
         }
 
         let progress_handle = tokio::spawn(process_progress(Arc::clone(&inner), progress_rx));
@@ -194,6 +181,7 @@ impl ModuleManager {
 
         self.inner.sync_catalog_to_state(&catalog).await;
         self.inner.reconcile_duckdb_engine(&catalog).await;
+        self.inner.reconcile_onnx_runtime(&catalog).await;
 
         Ok(catalog)
     }
@@ -507,6 +495,35 @@ impl Inner {
         }
     }
 
+    /// Report the ONNX Runtime module by what is actually on disk.
+    ///
+    /// With `ort/load-dynamic` the runtime is no longer linked into the binary,
+    /// so an installed module (with its shared library present) is Ready and a
+    /// removed one must not keep claiming Ready. States describing an in-flight
+    /// download are deliberately left alone.
+    async fn reconcile_onnx_runtime(&self, _catalog: &Catalog) {
+        let module_id = "onnx_runtime";
+        let installed = installed_onnx_runtime(&self.downloads_dir);
+        if let Some((_lib, version)) = installed {
+            self.set_state(module_id, ModuleState::Ready, Some(version), 0, 0, None)
+                .await;
+            return;
+        }
+
+        // Nothing on disk: only a state that claims otherwise needs correcting.
+        let claims_ready = {
+            let state = self.state.read().await;
+            state
+                .get(module_id)
+                .map(|instance| instance.state == ModuleState::Ready)
+                .unwrap_or(false)
+        };
+        if claims_ready {
+            self.set_state(module_id, ModuleState::Missing, None, 0, 0, None)
+                .await;
+        }
+    }
+
     async fn sync_catalog_to_state(&self, catalog: &Catalog) {
         let mut state = self.state.write().await;
         for manifest in &catalog.modules {
@@ -739,6 +756,73 @@ fn check_disk_space(dir: &Path, required: u64) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Locate the downloaded ONNX Runtime shared library and its version directory.
+///
+/// The module installs `<downloads_dir>/onnx_runtime/<version>/<pkg>/lib/<lib>`,
+/// where `<pkg>` is the per-platform directory inside the downloaded archive and
+/// the library name is versioned on Linux. The newest version in lexical order
+/// wins, mirroring [`crate::analytics::installed_engine`].
+fn installed_onnx_runtime(downloads_dir: &Path) -> Option<(PathBuf, String)> {
+    let module_dir = downloads_dir.join("onnx_runtime");
+    let mut found = None;
+    for entry in std::fs::read_dir(&module_dir).ok()?.flatten() {
+        let version_dir = entry.path();
+        if !version_dir.is_dir() {
+            continue;
+        }
+        if let Some(lib) = find_onnx_lib(&version_dir) {
+            if let Some(version) = version_dir
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+            {
+                found = Some((lib, version));
+            }
+        }
+    }
+    found
+}
+
+/// Search a module version directory for the ONNX Runtime shared library.
+fn find_onnx_lib(dir: &Path) -> Option<PathBuf> {
+    find_onnx_lib_rec(dir, 4)
+}
+
+fn find_onnx_lib_rec(dir: &Path, depth: usize) -> Option<PathBuf> {
+    if depth == 0 {
+        return None;
+    }
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        if is_dir {
+            if let Some(found) = find_onnx_lib_rec(&path, depth - 1) {
+                return Some(found);
+            }
+        } else if path.is_file() && is_onnx_lib_name(&path) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+/// The library file name the daemon loads, per OS. On Linux the extracted file
+/// is the versioned `.so.1.28.0` (the `libonnxruntime.so` symlinks are not
+/// materialised), so the name is matched by prefix.
+fn is_onnx_lib_name(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if cfg!(target_os = "windows") {
+        name == "onnxruntime.dll"
+    } else if cfg!(target_os = "macos") {
+        name == "libonnxruntime.dylib"
+    } else {
+        name.starts_with("libonnxruntime.so")
+    }
 }
 
 fn load_module_state(downloads_dir: &Path) -> BTreeMap<String, ModuleInstanceState> {

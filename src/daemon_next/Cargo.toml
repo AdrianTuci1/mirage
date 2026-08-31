@@ -52,7 +52,10 @@ chrono = { version = "0.4", features = ["serde"] }
 
 [features]
 default = ["onnx"]
-onnx = ["dep:ort", "ort/std", "ort/ndarray", "ort/tracing", "ort/download-binaries", "ort/copy-dylibs", "ort/tls-rustls", "ort/api-27"]
+# The ONNX Runtime is a downloaded module (`onnx_runtime`) the daemon loads at
+# runtime via `ORT_DYLIB_PATH`, so the build no longer downloads or statically
+# links it (`load-dynamic` skips both in `ort-sys`).
+onnx = ["dep:ort", "ort/std", "ort/ndarray", "ort/tracing", "ort/load-dynamic", "ort/tls-rustls", "ort/api-27"]
 smb = ["dep:pavao"]
 
 [dev-dependencies]

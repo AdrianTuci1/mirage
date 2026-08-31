@@ -90,7 +90,8 @@ async fn main() -> Result<()> {
 
     // The embedder decides the vector layout, so the store is opened with its
     // dimension instead of the configured default.
-    let embedder = create_embedder(&config.models_dir).context("failed to initialize embedder")?;
+    let embedder = create_embedder(&config.models_dir, &config.downloads_dir)
+        .context("failed to initialize embedder")?;
     let store = Arc::new(
         LanceDbStore::open_with_dimension(&config, embedder.dimension())
             .await

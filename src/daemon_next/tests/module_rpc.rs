@@ -171,12 +171,11 @@ async fn list_modules_returns_cached_catalog() {
         .find(|m| m["module_id"] == "text_embedding_model")
         .unwrap();
     assert_eq!(text_model["state"], "missing");
-    // The cached catalog declares `onnx_runtime`, which a build with the `onnx`
-    // feature marks ready without downloading anything, so the model that depends
-    // on it has its dependencies satisfied even though the model itself is absent.
+    // The runtime is not linked any more (`ort/load-dynamic`), so the cached
+    // `onnx_runtime` dependency is only satisfied once the module is actually
+    // downloaded. With the empty temp downloads directory it stays missing.
     assert_eq!(
-        text_model["dependencies_ready"],
-        cfg!(feature = "onnx"),
+        text_model["dependencies_ready"], false,
         "module set: {ids:?}"
     );
 
