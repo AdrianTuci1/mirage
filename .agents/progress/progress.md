@@ -10,6 +10,10 @@
 - **Build artifacts:** directorul `src/daemon_next/target/` a fost curățat (~20GB eliberați).
 - **Buget memorie indexare:** daemonul respectă `memory_budget_mb` (default 3072 MB); batching embeddings, upsert LanceDB și procesare cloud sunt limitate de acest buget.
 - **Build artifacts:** directorul `src/daemon_next/target/` a fost curățat din nou (~20.5GB eliberați); nu au rămas fișiere `.log`.
+- **Profil dev Cargo:** `src/daemon_next/Cargo.toml` are acum `[profile.dev] debug = "line-tables-only"` + `[profile.dev.package."*"] debug = false`;
+  înainte, DWARF complet pentru 733 de crate umfla `target/`. Greutatea binarului rămas nu e debug info, ci cod static: `libduckdb.a` 236 MB (feature `bundled`),
+  `lance` 227 MB, `lance-index` 105 MB, `aws-sdk-s3` 93 MB, `ort-sys` 78 MB (ONNX Runtime static).
+  Greutățile CLIP (148 MB) și tabela LanceDB sunt fișiere runtime în `models_dir` / `data_dir/lancedb`, nu sunt linkuite în binar.
 
 ## Ce funcționează local (finalizat)
 

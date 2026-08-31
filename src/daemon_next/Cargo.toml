@@ -60,6 +60,15 @@ smb = ["dep:pavao"]
 [dev-dependencies]
 tempfile = "3"
 
+# Dev profile: DWARF for all 733 crates made target/ reach 23 GiB and the debug
+# binary 689 MB. Line tables keep backtraces usable; dependencies get no debug
+# info at all.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 strip = true
 lto = true
