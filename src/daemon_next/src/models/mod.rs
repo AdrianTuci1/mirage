@@ -9,6 +9,16 @@ pub struct Record {
     pub vector: Vec<f32>,
     pub updated_at: String,
     pub version: i64,
+    /// What produced the vector: `image`, `text` or `name`.
+    #[serde(default = "default_modality")]
+    pub modality: String,
+    /// Short human readable summary of the content that was embedded.
+    #[serde(default)]
+    pub caption: String,
+}
+
+fn default_modality() -> String {
+    crate::content::MediaKind::Metadata.as_str().to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

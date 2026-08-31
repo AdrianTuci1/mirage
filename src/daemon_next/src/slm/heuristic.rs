@@ -153,6 +153,7 @@ mod tests {
         assert!(!is_sql_question("show me pictures of beaches"));
     }
 
+    #[cfg(feature = "duckdb")]
     #[test]
     fn heuristic_sql_lists_tables() {
         let (analytics, _dir) = temp_analytics();

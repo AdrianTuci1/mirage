@@ -40,13 +40,33 @@ impl LocalFileIndex {
 
     /// Replace the current index with entries discovered under `roots`.
     pub fn index_roots(&mut self, roots: &[PathBuf], excluded_dirs: &[String]) {
-        self.entries.clear();
-        self.name_to_indices.clear();
+        self.index_scanned(&scan_files(roots, excluded_dirs));
+    }
 
-        for root in roots {
-            self.walk(root, excluded_dirs);
+    /// Replace the local part of the index with a pre-scanned file list.
+    ///
+    /// The scan is separated from the insertion so the indexing pass can report a
+    /// total before it starts embedding.
+    pub fn index_scanned(&mut self, files: &[ScannedFile]) {
+        self.entries.retain(|e| e.source_type != "local");
+        for file in files {
+            let file_name = file
+                .absolute_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if file_name.is_empty() {
+                continue;
+            }
+            self.entries.push(LocalEntry {
+                id: file.id(),
+                absolute_path: file.absolute_path.clone(),
+                relative_path: file.relative_path.clone(),
+                file_name,
+                source_type: "local".to_string(),
+                open_url: None,
+            });
         }
-
         self.rebuild_token_index();
     }
 
@@ -84,7 +104,7 @@ impl LocalFileIndex {
         }
     }
 
-    fn walk(&mut self, root: &Path, excluded_dirs: &[String]) {
+    fn walk_into(root: &Path, excluded_dirs: &[String], out: &mut Vec<ScannedFile>) {
         let excluded: std::collections::HashSet<String> =
             excluded_dirs.iter().map(|s| s.to_lowercase()).collect();
 
@@ -123,14 +143,10 @@ impl LocalFileIndex {
                     if file_name.is_empty() {
                         continue;
                     }
-                    let relative_path = strip_root(root, &path);
-                    self.entries.push(LocalEntry {
-                        id: format!("file://{}", path.to_string_lossy()),
+                    out.push(ScannedFile {
                         absolute_path: path.clone(),
-                        relative_path: relative_path.clone(),
-                        file_name: file_name.clone(),
-                        source_type: "local".to_string(),
-                        open_url: None,
+                        relative_path: strip_root(root, &path),
+                        size: metadata.len(),
                     });
                 }
             }
@@ -179,6 +195,35 @@ impl LocalFileIndex {
     }
 }
 
+/// A file discovered on disk during a scan, before anything is embedded.
+#[derive(Debug, Clone)]
+pub struct ScannedFile {
+    pub absolute_path: PathBuf,
+    pub relative_path: String,
+    pub size: u64,
+}
+
+impl ScannedFile {
+    /// Stable identifier shared by the name index and the semantic index.
+    pub fn id(&self) -> String {
+        format!("file://{}", self.absolute_path.to_string_lossy())
+    }
+}
+
+/// Walk every root and return the files that would be indexed.
+///
+/// Kept separate from [`LocalFileIndex::index_scanned`] so the indexing pass can
+/// announce a total before the slow embedding step begins.
+pub fn scan_files(roots: &[PathBuf], excluded_dirs: &[String]) -> Vec<ScannedFile> {
+    let mut files = Vec::new();
+    for root in roots {
+        LocalFileIndex::walk_into(root, excluded_dirs, &mut files);
+    }
+    files.sort_by(|a, b| a.absolute_path.cmp(&b.absolute_path));
+    files.dedup_by(|a, b| a.absolute_path == b.absolute_path);
+    files
+}
+
 fn strip_root(root: &Path, path: &Path) -> String {
     path.strip_prefix(root)
         .unwrap_or(path)
@@ -191,10 +236,6 @@ fn path_tokens(path: &str) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .map(|s| s.to_lowercase())
         .collect()
-}
-
-fn source_type_from_path(_path: &Path) -> String {
-    "local".to_string()
 }
 
 fn score_match(query: &str, entry: &LocalEntry) -> f64 {

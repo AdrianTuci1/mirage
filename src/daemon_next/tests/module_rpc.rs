@@ -74,7 +74,14 @@ async fn spawn_daemon(dir: &tempfile::TempDir) -> tokio::process::Child {
     std::fs::create_dir_all(&downloads_dir).unwrap();
     std::fs::write(downloads_dir.join("catalog.json"), catalog.to_string()).unwrap();
 
+    let config_path = dir.path().join("daemon.yaml");
+    // An explicit config keeps the test off the developer's own daemon.yaml, and
+    // empty roots mean no recursive watch is registered over a real directory tree.
+    std::fs::write(&config_path, "roots: []\n").unwrap();
+
     let mut child = Command::new(env!("CARGO_BIN_EXE_mirage-daemon"))
+        .arg("--config")
+        .arg(&config_path)
         .arg("--socket-path")
         .arg(&socket_path)
         .arg("--data-dir")
@@ -134,20 +141,31 @@ async fn list_modules_returns_cached_catalog() {
         .as_array()
         .expect("result is not array")
         .clone();
-    assert_eq!(modules.len(), 2);
     let ids: Vec<String> = modules
         .iter()
         .map(|m| m["module_id"].as_str().unwrap().to_string())
         .collect();
     assert!(ids.contains(&String::from("text_embedding_model")));
     assert!(ids.contains(&String::from("onnx_runtime")));
+    // The cached catalog is merged with the built-in module set, so the two fixtures
+    // written above arrive next to the CLIP modules the daemon ships with.
+    assert!(ids.contains(&String::from("clip_text_encoder")));
+    assert!(ids.contains(&String::from("clip_vision_encoder")));
+    assert_eq!(modules.len(), 5, "unexpected module set: {ids:?}");
 
     let text_model = modules
         .iter()
         .find(|m| m["module_id"] == "text_embedding_model")
         .unwrap();
     assert_eq!(text_model["state"], "missing");
-    assert_eq!(text_model["dependencies_ready"], false);
+    // The cached catalog declares `onnx_runtime`, which a build with the `onnx`
+    // feature marks ready without downloading anything, so the model that depends
+    // on it has its dependencies satisfied even though the model itself is absent.
+    assert_eq!(
+        text_model["dependencies_ready"],
+        cfg!(feature = "onnx"),
+        "module set: {ids:?}"
+    );
 
     let _ = child.kill().await;
     let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;

@@ -48,6 +48,22 @@ struct UpdateConnectorsRequest {
     connectors: Vec<crate::config::ConnectorConfig>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+struct IndexingSettingsRequest {
+    roots: Vec<PathBuf>,
+    excluded_dirs: Vec<String>,
+}
+
+impl Default for IndexingSettingsRequest {
+    fn default() -> Self {
+        Self {
+            roots: Vec::new(),
+            excluded_dirs: Vec::new(),
+        }
+    }
+}
+
 impl Default for SearchRequest {
     fn default() -> Self {
         Self {
@@ -118,22 +134,43 @@ impl IpcServer {
 
         let status_store = Arc::clone(&store);
         let status_analytics = Arc::clone(&analytics);
+        let status_embedder = Arc::clone(&embedder);
+        let status_modules = server.config.modules.clone();
+        let status_search = Arc::clone(&search);
         server.register("status", move |_params| {
             let store = Arc::clone(&status_store);
             let analytics = Arc::clone(&status_analytics);
+            let embedder = Arc::clone(&status_embedder);
+            let modules = status_modules.clone();
+            let search = Arc::clone(&status_search);
             Box::pin(async move {
                 let vector_count = store.count().await.unwrap_or(0);
+                let progress = search.index_state().snapshot();
                 let response = json!({
                     "status": "ok",
                     "version": "0.1.0",
                     "vector_count": vector_count,
                     "modules": {
+                        // What the daemon can really do right now: `vision` follows the
+                        // installed embedder, the rest are the configured capabilities.
                         "vector": true,
-                        "text": true,
-                        "tabular": true,
+                        "text": modules.text,
+                        "tabular": modules.tabular && analytics.is_available(),
+                        "audio": modules.audio,
+                        "vision": embedder.supports_images(),
+                        "semantic": embedder.is_semantic(),
+                    },
+                    "index": {
+                        "running": progress.running,
+                        "indexed": progress.indexed,
+                        "total": progress.total,
+                        "phase": progress.phase,
+                        "stale": progress.stale,
+                        "percent": progress.percent(),
+                        "error": progress.error,
+                        "last_finished_at_ms": progress.last_finished_at_ms,
                     },
                 });
-                let _ = analytics;
                 Ok(response)
             })
         });
@@ -292,13 +329,81 @@ impl IpcServer {
         server.register("index_files", move |_params: Value| {
             let search = Arc::clone(&index_files_search);
             Box::pin(async move {
-                let count = search.index_files().await.map_err(|e| {
+                // The pass runs in the background so this connection stays free for
+                // searches; the client watches progress through `index_status`.
+                let already_running = search.index_state().is_running();
+                if !already_running {
+                    let pass_search = Arc::clone(&search);
+                    tokio::spawn(async move {
+                        match pass_search.index_files().await {
+                            Ok(count) => info!("index pass finished with {} entries", count),
+                            Err(e) => warn!("index pass failed: {}", e),
+                        }
+                    });
+                }
+                let progress = search.index_state().snapshot();
+                Ok(json!({
+                    "count": progress.indexed,
+                    "started": !already_running,
+                    "running": true,
+                }))
+            })
+        });
+
+        let index_status_search = Arc::clone(&search);
+        server.register("index_status", move |_params: Value| {
+            let search = Arc::clone(&index_status_search);
+            Box::pin(async move {
+                let progress = search.index_state().snapshot();
+                serde_json::to_value(progress).map_err(|e| {
                     JsonRpcError::new(
                         crate::ipc::protocol::ERROR_INTERNAL_ERROR,
-                        format!("index_files failed: {}", e),
+                        format!("failed to serialize index status: {}", e),
                     )
-                })?;
-                Ok(json!({ "count": count }))
+                })
+            })
+        });
+
+        let settings_search = Arc::clone(&search);
+        server.register("get_indexing_settings", move |_params: Value| {
+            let search = Arc::clone(&settings_search);
+            Box::pin(async move {
+                let settings = search.indexing_settings();
+                Ok(json!({
+                    "roots": settings.roots,
+                    "excluded_dirs": settings.excluded_dirs,
+                }))
+            })
+        });
+
+        let update_settings_search = Arc::clone(&search);
+        let update_settings_config_path = server.config_path.clone();
+        server.register("update_indexing_settings", move |params: Value| {
+            let search = Arc::clone(&update_settings_search);
+            let config_path = update_settings_config_path.clone();
+            Box::pin(async move {
+                let request: IndexingSettingsRequest =
+                    serde_json::from_value(params).map_err(|e| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                            format!("invalid update_indexing_settings params: {}", e),
+                        )
+                    })?;
+                if request.roots.is_empty() {
+                    return Err(JsonRpcError::new(
+                        crate::ipc::protocol::ERROR_INVALID_PARAMS,
+                        "at least one root is required",
+                    ));
+                }
+                search
+                    .update_indexing_settings(request.roots, request.excluded_dirs, &config_path)
+                    .map_err(|e| {
+                        JsonRpcError::new(
+                            crate::ipc::protocol::ERROR_INTERNAL_ERROR,
+                            format!("update_indexing_settings failed: {}", e),
+                        )
+                    })?;
+                Ok(json!({ "stale": true }))
             })
         });
 

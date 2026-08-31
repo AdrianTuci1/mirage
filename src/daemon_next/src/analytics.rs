@@ -107,6 +107,11 @@ cfg_if::cfg_if! {
             pub fn db_path(&self) -> &Path {
                 &self.db_path
             }
+
+            /// The bundled DuckDB engine is linked into this build.
+            pub fn is_available(&self) -> bool {
+                true
+            }
         }
 
         fn row_to_json(row: &Row, column_names: &[String], column_types: &[DataType]) -> Result<Map<String, Value>> {
@@ -252,6 +257,11 @@ cfg_if::cfg_if! {
 
             pub fn db_path(&self) -> &std::path::Path {
                 &self._db_path
+            }
+
+            /// SQL search is unavailable without the `duckdb` feature.
+            pub fn is_available(&self) -> bool {
+                false
             }
         }
     }

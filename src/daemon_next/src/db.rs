@@ -43,14 +43,45 @@ impl LanceDbStore {
             .execute()
             .await
             .context("failed to list table names")?;
+        let expected_schema = Self::schema(dimension);
         let table = if table_names.iter().any(|n| n == TABLE_NAME) {
-            db.open_table(TABLE_NAME)
+            let table = db
+                .open_table(TABLE_NAME)
                 .execute()
                 .await
-                .context("failed to open records table")?
+                .context("failed to open records table")?;
+            let actual = table
+                .schema()
+                .await
+                .context("failed to read records table schema")?;
+            match schema_gap(&actual, &expected_schema) {
+                None => table,
+                Some(reason) => {
+                    // The semantic index is a rebuildable cache of the user's files, so a
+                    // schema that no longer matches (dimension change, new columns) is
+                    // recreated instead of failing every write. Callers learn about it from
+                    // `count()` returning zero and the stale flag in the index status.
+                    tracing::warn!("recreating semantic index: {}", reason);
+                    drop(table);
+                    db.drop_table(TABLE_NAME, &[])
+                        .await
+                        .context("failed to drop records table with an outdated schema")?;
+                    let batches = RecordBatchIterator::new(
+                        vec![].into_iter().map(Ok),
+                        expected_schema.clone(),
+                    );
+                    db.create_table(
+                        TABLE_NAME,
+                        Box::new(batches) as Box<dyn arrow_array::RecordBatchReader + Send>,
+                    )
+                    .execute()
+                    .await
+                    .context("failed to recreate records table")?
+                }
+            }
         } else {
-            let schema = Self::schema(dimension);
-            let batches = RecordBatchIterator::new(vec![].into_iter().map(Ok), schema.clone());
+            let batches =
+                RecordBatchIterator::new(vec![].into_iter().map(Ok), expected_schema.clone());
             db.create_table(
                 TABLE_NAME,
                 Box::new(batches) as Box<dyn arrow_array::RecordBatchReader + Send>,
@@ -65,6 +96,11 @@ impl LanceDbStore {
             table,
             dimension,
         })
+    }
+
+    /// Dimensionality of the vectors this store accepts.
+    pub fn dimension(&self) -> usize {
+        self.dimension
     }
 
     pub async fn upsert(&self, records: Vec<Record>) -> Result<()> {
@@ -110,6 +146,10 @@ impl LanceDbStore {
         query_vector: Vec<f32>,
         top_k: usize,
     ) -> Result<Vec<RecordWithScore>> {
+        // A caller may come from another embedder width: the KMP client still sends
+        // 384-d vectors while CLIP stores 512-d. The write path resizes, so the read
+        // path has to as well, or LanceDB rejects the query outright.
+        let query_vector = downsample_vector(&query_vector, self.dimension);
         let mut results = self
             .table
             .vector_search(&*query_vector)
@@ -165,6 +205,8 @@ impl LanceDbStore {
             ),
             Field::new("updated_at", DataType::Utf8, false),
             Field::new("version", DataType::Int64, false),
+            Field::new("modality", DataType::Utf8, false),
+            Field::new("caption", DataType::Utf8, false),
         ]))
     }
 
@@ -176,6 +218,8 @@ impl LanceDbStore {
         let updated_ats =
             StringArray::from_iter_values(records.iter().map(|r| r.updated_at.clone()));
         let versions = Int64Array::from_iter_values(records.iter().map(|r| r.version));
+        let modalities = StringArray::from_iter_values(records.iter().map(|r| r.modality.clone()));
+        let captions = StringArray::from_iter_values(records.iter().map(|r| r.caption.clone()));
 
         let vector_array = FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
             records.iter().map(|r| {
@@ -196,12 +240,17 @@ impl LanceDbStore {
                 Arc::new(vector_array),
                 Arc::new(updated_ats),
                 Arc::new(versions),
+                Arc::new(modalities),
+                Arc::new(captions),
             ],
         )
         .context("failed to build record batch from records")
     }
 
-    async fn all_records(&self) -> Result<Vec<Record>> {
+    /// Every stored record. Only used by tests: an index can hold millions of
+    /// vectors, so production paths read through `search` instead.
+    #[cfg(test)]
+    pub(crate) async fn all_records(&self) -> Result<Vec<Record>> {
         let mut results = self
             .table
             .query()
@@ -259,6 +308,14 @@ impl LanceDbStore {
             .column_by_name("version")
             .and_then(|c| c.as_any().downcast_ref::<Int64Array>())
             .context("missing version column")?;
+        // Optional columns: an index written by an older daemon has no modality or
+        // caption, so reads must not fail because of them.
+        let modalities = batch
+            .column_by_name("modality")
+            .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+        let captions = batch
+            .column_by_name("caption")
+            .and_then(|c| c.as_any().downcast_ref::<StringArray>());
 
         let mut records = Vec::new();
         for i in 0..batch.num_rows() {
@@ -277,10 +334,39 @@ impl LanceDbStore {
                 vector,
                 updated_at: updated_ats.value(i).to_string(),
                 version: versions.value(i),
+                modality: modalities
+                    .map(|m| m.value(i).to_string())
+                    .unwrap_or_else(default_modality),
+                caption: captions.map(|c| c.value(i).to_string()).unwrap_or_default(),
             });
         }
         Ok(records)
     }
+}
+
+/// Column added after the first released index format; older rows fall back to it.
+fn default_modality() -> String {
+    crate::content::MediaKind::Metadata.as_str().to_string()
+}
+
+/// Describe why an existing table cannot hold the records we want to write, or
+/// `None` when every required column is present with the expected type.
+fn schema_gap(actual: &SchemaRef, expected: &SchemaRef) -> Option<String> {
+    for field in expected.fields() {
+        match actual.field_with_name(field.name()) {
+            Ok(existing) if existing.data_type() == field.data_type() => {}
+            Ok(existing) => {
+                return Some(format!(
+                    "column {} is {:?}, expected {:?}",
+                    field.name(),
+                    existing.data_type(),
+                    field.data_type()
+                ))
+            }
+            Err(_) => return Some(format!("column {} is missing", field.name())),
+        }
+    }
+    None
 }
 
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
@@ -376,6 +462,8 @@ mod tests {
             vector: v.clone(),
             updated_at: "2024-01-01".to_string(),
             version: 1,
+            modality: "name".to_string(),
+            caption: String::new(),
         }];
         store.upsert(records).await.unwrap();
 
@@ -398,6 +486,8 @@ mod tests {
             vector: vec![1.0_f32, 0.0_f32, 0.0_f32],
             updated_at: "2024-01-01".to_string(),
             version: 1,
+            modality: "name".to_string(),
+            caption: String::new(),
         }];
         store.upsert(records).await.unwrap();
 
@@ -407,6 +497,62 @@ mod tests {
             .unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].score.abs() < 0.01, "score should be ~0.0");
+    }
+
+    fn record(id: &str, vector: Vec<f32>, modality: &str, caption: &str) -> Record {
+        Record {
+            id: id.to_string(),
+            relative_path: format!("/{}", id),
+            source_type: "local".to_string(),
+            vector,
+            updated_at: "2026-01-01".to_string(),
+            version: 1,
+            modality: modality.to_string(),
+            caption: caption.to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn modality_and_caption_round_trip() {
+        let (config, _dir) = temp_config();
+        let store = LanceDbStore::open(&config).await.unwrap();
+        store
+            .upsert(vec![record(
+                "r1",
+                vec![1.0, 0.0, 0.0],
+                "image",
+                "sunset over the harbour",
+            )])
+            .await
+            .unwrap();
+
+        let records = store.all_records().await.unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].modality, "image");
+        assert_eq!(records[0].caption, "sunset over the harbour");
+    }
+
+    #[tokio::test]
+    async fn reopening_with_another_dimension_rebuilds_the_table() {
+        let (config, _dir) = temp_config();
+        let store = LanceDbStore::open(&config).await.unwrap();
+        store
+            .upsert(vec![record("r1", vec![1.0, 0.0, 0.0], "name", "")])
+            .await
+            .unwrap();
+        assert_eq!(store.count().await.unwrap(), 1);
+        drop(store);
+
+        // The embedder moved to a wider vector: the old table cannot hold it, so
+        // the store recreates it empty instead of failing every write.
+        let store = LanceDbStore::open_with_dimension(&config, 5).await.unwrap();
+        assert_eq!(store.dimension(), 5);
+        assert_eq!(store.count().await.unwrap(), 0);
+        store
+            .upsert(vec![record("r2", vec![0.0; 5], "text", "excerpt")])
+            .await
+            .unwrap();
+        assert_eq!(store.count().await.unwrap(), 1);
     }
 
     #[test]

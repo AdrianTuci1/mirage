@@ -7,8 +7,14 @@ use tokio::process::Command;
 async fn ipc_ping_returns_pong() {
     let dir = tempfile::tempdir().unwrap();
     let socket_path = dir.path().join("mirage.sock");
+    let config_path = dir.path().join("daemon.yaml");
+    // An explicit config keeps the test off the developer's own daemon.yaml, and
+    // empty roots mean no recursive watch is registered over a real directory tree.
+    std::fs::write(&config_path, "roots: []\n").unwrap();
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_mirage-daemon"))
+        .arg("--config")
+        .arg(dir.path().join("daemon.yaml"))
         .arg("--socket-path")
         .arg(&socket_path)
         .arg("--data-dir")

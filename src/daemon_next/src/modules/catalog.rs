@@ -1,4 +1,4 @@
-use crate::modules::manifest::{current_platform_key, ModuleManifest};
+use crate::modules::manifest::{current_platform_key, ModuleManifest, PlatformEntry};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -24,76 +24,106 @@ impl Catalog {
     }
 }
 
-/// Built-in catalog containing optional runtime modules that the daemon can ship with.
-/// The URLs are placeholders and should be replaced with real distribution endpoints.
+/// A single-file model download: the archive *is* the file, and the manifest
+/// decides the name it lands under inside the module directory.
+fn raw_model(url: &str, size: u64, sha256: &str, file_name: &str) -> PlatformEntry {
+    use crate::modules::manifest::{ArchiveFormat, FileEntry};
+    PlatformEntry {
+        url: url.to_string(),
+        size,
+        checksum: sha256.to_string(),
+        archive_format: ArchiveFormat::Raw,
+        files: vec![FileEntry {
+            relative_path: file_name.to_string(),
+            sha256: sha256.to_string(),
+            executable: false,
+            required: true,
+        }],
+    }
+}
+
+/// Built-in catalog of the on-device models that make search work.
+///
+/// Every entry is a real, publicly hosted artifact pinned by SHA-256, so a
+/// download either verifies or fails loudly. The ONNX Runtime and DuckDB entries
+/// that used to live here are gone: this build links both (`ort/download-binaries`
+/// and the `duckdb` feature), and their URLs were placeholders that never worked.
 pub fn default_catalog() -> Catalog {
-    use crate::modules::manifest::{ArchiveFormat, FileEntry, ModuleKind, PlatformEntry};
+    use crate::modules::manifest::{ModuleKind, PlatformEntry};
     use std::collections::HashMap;
 
-    let mut platforms = HashMap::new();
-    platforms.insert(
-        current_platform_key(),
-        PlatformEntry {
-            url: String::from("https://example.com/mirage/onnx_runtime-1.28.0.tar.gz"),
-            size: 0,
-            checksum: String::from(
-                "0000000000000000000000000000000000000000000000000000000000000000",
-            ),
-            archive_format: ArchiveFormat::TarGz,
-            files: vec![FileEntry {
-                relative_path: String::from("libonnxruntime.so"),
-                sha256: String::from(
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                ),
-                executable: false,
-                required: true,
-            }],
-        },
-    );
+    let clip = "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/main";
 
-    let onnx_runtime = ModuleManifest {
-        id: String::from("onnx_runtime"),
-        name: String::from("ONNX Runtime"),
-        version: String::from("1.28.0"),
-        description: String::from("ONNX Runtime inference engine for local embeddings and SLM."),
-        kind: ModuleKind::Runtime,
+    // CLIP text encoder: int8 quantized, emits a 512-d projected embedding.
+    let mut text_platforms: HashMap<String, PlatformEntry> = HashMap::new();
+    text_platforms.insert(
+        current_platform_key(),
+        raw_model(
+            &format!("{clip}/onnx/text_model_int8.onnx"),
+            64_070_791,
+            "18845f2ccc35223bb7fec403383a131154b11ac0918df25cf51986df5efd3a21",
+            "clip_text_encoder.onnx",
+        ),
+    );
+    let clip_text = ModuleManifest {
+        id: String::from("clip_text_encoder"),
+        name: String::from("Text encoder (CLIP)"),
+        version: String::from("1.0.0"),
+        description: String::from(
+            "Encodes words and sentences into the same 512-dimensional space as images.",
+        ),
+        kind: ModuleKind::Model,
         license: String::from("MIT"),
         is_optional: true,
-        dependencies: vec![],
-        platforms,
+        dependencies: vec![String::from("clip_tokenizer")],
+        platforms: text_platforms,
     };
 
-    let mut duckdb_platforms = HashMap::new();
-    duckdb_platforms.insert(
+    // CLIP vision encoder: int8 quantized, same 512-d space.
+    let mut vision_platforms: HashMap<String, PlatformEntry> = HashMap::new();
+    vision_platforms.insert(
         current_platform_key(),
-        PlatformEntry {
-            url: String::from("https://example.com/mirage/duckdb-1.1.3.tar.gz"),
-            size: 0,
-            checksum: String::from(
-                "0000000000000000000000000000000000000000000000000000000000000000",
-            ),
-            archive_format: ArchiveFormat::TarGz,
-            files: vec![FileEntry {
-                relative_path: String::from("libduckdb.so"),
-                sha256: String::from(
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                ),
-                executable: false,
-                required: true,
-            }],
-        },
+        raw_model(
+            &format!("{clip}/onnx/vision_model_int8.onnx"),
+            88_648_877,
+            "0ab0c1b3ace708e539633af1744d5a95247fe4e14d3e08ff197ef82a6cb9bd93",
+            "clip_vision_encoder.onnx",
+        ),
     );
-
-    let duckdb_module = ModuleManifest {
-        id: String::from("duckdb"),
-        name: String::from("DuckDB Analytics"),
-        version: String::from("1.1.3"),
-        description: String::from("Embedded analytics engine for SQL queries over metadata."),
-        kind: ModuleKind::Runtime,
+    let clip_vision = ModuleManifest {
+        id: String::from("clip_vision_encoder"),
+        name: String::from("Vision encoder (CLIP)"),
+        version: String::from("1.0.0"),
+        description: String::from(
+            "Encodes photographs into the same 512-dimensional space as text, so a word can find a picture.",
+        ),
+        kind: ModuleKind::Model,
         license: String::from("MIT"),
         is_optional: true,
         dependencies: vec![],
-        platforms: duckdb_platforms,
+        platforms: vision_platforms,
+    };
+
+    let mut tokenizer_platforms: HashMap<String, PlatformEntry> = HashMap::new();
+    tokenizer_platforms.insert(
+        current_platform_key(),
+        raw_model(
+            &format!("{clip}/tokenizer.json"),
+            2_224_119,
+            "f7f3b7af117d467b58374797691a6438d3e6b9e9cef800dfd5dced7f697a90cd",
+            "clip_tokenizer.json",
+        ),
+    );
+    let clip_tokenizer = ModuleManifest {
+        id: String::from("clip_tokenizer"),
+        name: String::from("CLIP tokenizer"),
+        version: String::from("1.0.0"),
+        description: String::from("Byte-pair encoding vocabulary shared by both CLIP encoders."),
+        kind: ModuleKind::Model,
+        license: String::from("MIT"),
+        is_optional: false,
+        dependencies: vec![],
+        platforms: tokenizer_platforms,
     };
 
     Catalog {
@@ -105,7 +135,7 @@ pub fn default_catalog() -> Catalog {
             public_key_fingerprint: String::from("builtin"),
             signature: String::from("builtin"),
         },
-        modules: vec![onnx_runtime, duckdb_module],
+        modules: vec![clip_text, clip_vision, clip_tokenizer],
     }
 }
 
@@ -129,5 +159,73 @@ mod tests {
         let catalog: Catalog = serde_json::from_str(json).unwrap();
         assert_eq!(catalog.schema_version, "1.0.0");
         assert!(catalog.find_module("duckdb").is_none());
+    }
+
+    #[test]
+    fn built_in_catalog_entries_are_real_downloads() {
+        let catalog = default_catalog();
+        assert!(!catalog.modules.is_empty());
+        for module in &catalog.modules {
+            let platform = module
+                .platform_for_current_target()
+                .unwrap_or_else(|| panic!("{} has no entry for the host platform", module.id));
+            assert!(
+                platform.url.starts_with("https://") && !platform.url.contains("example.com"),
+                "{} points at {}",
+                module.id,
+                platform.url
+            );
+            assert!(platform.size > 0, "{} has no size", module.id);
+            assert_eq!(
+                platform.checksum.len(),
+                64,
+                "{} is not pinned by a sha256",
+                module.id
+            );
+            assert!(
+                !platform.files.is_empty(),
+                "{} declares no files",
+                module.id
+            );
+            for file in &platform.files {
+                assert_eq!(
+                    &file.sha256, &platform.checksum,
+                    "{}: file checksum differs from the archive checksum",
+                    module.id
+                );
+            }
+            for dependency in &module.dependencies {
+                assert!(
+                    catalog.find_module(dependency).is_some(),
+                    "{} depends on the unknown module {}",
+                    module.id,
+                    dependency
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn clip_pair_is_the_shared_text_image_space() {
+        let catalog = default_catalog();
+        let text = catalog.find_module("clip_text_encoder").unwrap();
+        let vision = catalog.find_module("clip_vision_encoder").unwrap();
+        // Both encoders come from the same published model repository, which is what
+        // makes their vectors comparable.
+        let repo_of = |m: &ModuleManifest| {
+            m.platform_for_current_target()
+                .unwrap()
+                .url
+                .split("/resolve/")
+                .next()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(repo_of(text), repo_of(vision));
+        assert_eq!(
+            text.dependencies,
+            vec![String::from("clip_tokenizer")],
+            "the text encoder needs the tokenizer to produce real token ids"
+        );
     }
 }

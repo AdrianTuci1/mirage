@@ -5,10 +5,14 @@ use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
 /// Extract an archive to `dest_dir`. Returns the list of extracted file paths.
+///
+/// `files` is the manifest's file list; it names the destination for a `Raw`
+/// download, whose own file name is just the download scratch name.
 pub fn extract_archive(
     archive_path: impl AsRef<Path>,
     dest_dir: impl AsRef<Path>,
     format: &ArchiveFormat,
+    files: &[FileEntry],
 ) -> Result<Vec<PathBuf>> {
     let archive_path = archive_path.as_ref();
     let dest_dir = dest_dir.as_ref();
@@ -22,7 +26,7 @@ pub fn extract_archive(
     match format {
         ArchiveFormat::TarGz => extract_tar_gz(archive_path, dest_dir),
         ArchiveFormat::Zip => extract_zip(archive_path, dest_dir),
-        ArchiveFormat::Raw => extract_raw(archive_path, dest_dir),
+        ArchiveFormat::Raw => extract_raw(archive_path, dest_dir, files),
     }
 }
 
@@ -72,11 +76,20 @@ fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(extracted)
 }
 
-fn extract_raw(archive_path: &Path, dest_dir: &Path) -> Result<Vec<PathBuf>> {
-    let name = archive_path
-        .file_name()
-        .ok_or_else(|| anyhow::anyhow!("raw archive has no file name"))?;
-    let target = dest_dir.join(name);
+fn extract_raw(archive_path: &Path, dest_dir: &Path, files: &[FileEntry]) -> Result<Vec<PathBuf>> {
+    // A single-file module (an ONNX graph, a tokenizer) is named by the manifest,
+    // not by the download scratch file.
+    let target = match files {
+        [only] => dest_dir.join(&only.relative_path),
+        _ => dest_dir.join(
+            archive_path
+                .file_name()
+                .ok_or_else(|| anyhow::anyhow!("raw archive has no file name"))?,
+        ),
+    };
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent)?;
+    }
     fs::copy(archive_path, &target)?;
     Ok(vec![target])
 }
@@ -162,10 +175,30 @@ mod tests {
         let src = src_dir.path().join("model.onnx");
         fs::write(&src, b"fake model").unwrap();
 
-        let extracted = extract_archive(&src, dest_dir.path(), &ArchiveFormat::Raw).unwrap();
+        let extracted = extract_archive(&src, dest_dir.path(), &ArchiveFormat::Raw, &[]).unwrap();
         assert_eq!(extracted.len(), 1);
         assert!(extracted[0].exists());
         assert_eq!(fs::read_to_string(&extracted[0]).unwrap(), "fake model");
+    }
+
+    #[test]
+    fn extract_raw_uses_the_manifest_file_name() {
+        let src_dir = TempDir::new().unwrap();
+        let dest_dir = TempDir::new().unwrap();
+        // The downloader writes to `<id>.<version>.part`, which is not a usable name.
+        let src = src_dir.path().join("clip_text_encoder.1.0.0.part");
+        fs::write(&src, b"fake model").unwrap();
+
+        let files = vec![FileEntry {
+            relative_path: String::from("text_model_int8.onnx"),
+            sha256: String::new(),
+            executable: false,
+            required: true,
+        }];
+        let extracted =
+            extract_archive(&src, dest_dir.path(), &ArchiveFormat::Raw, &files).unwrap();
+        assert_eq!(extracted.len(), 1);
+        assert!(extracted[0].ends_with("text_model_int8.onnx"));
     }
 
     #[test]

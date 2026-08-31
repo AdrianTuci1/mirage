@@ -5,8 +5,14 @@ use tokio::process::Command;
 
 async fn spawn_daemon(dir: &tempfile::TempDir) -> tokio::process::Child {
     let socket_path = dir.path().join("mirage.sock");
+    let config_path = dir.path().join("daemon.yaml");
+    // An explicit config keeps the test off the developer's own daemon.yaml, and
+    // empty roots mean no recursive watch is registered over a real directory tree.
+    std::fs::write(&config_path, "roots: []\n").unwrap();
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_mirage-daemon"))
+        .arg("--config")
+        .arg(&config_path)
         .arg("--socket-path")
         .arg(&socket_path)
         .arg("--data-dir")
@@ -285,10 +291,29 @@ async fn index_files_rpc_scans_configured_root() {
         .expect("failed to call index_files");
 
     assert_eq!(result.error, None);
-    let count = result.result.expect("missing result")["count"]
-        .as_u64()
-        .expect("count not a number");
-    assert_eq!(count, 1, "expected one indexed file");
+    let started = result.result.expect("missing result");
+    // The RPC answers at once so searches stay free while the pass runs; progress is
+    // watched through `index_status`, exactly like the Settings window does.
+    assert_eq!(started["started"], true, "index_files response: {started}");
+    assert_eq!(started["running"], true, "index_files response: {started}");
+
+    let indexed = tokio::time::timeout(Duration::from_secs(60), async {
+        loop {
+            let progress =
+                mirage_daemon::ipc::client::IpcClient::call(&socket_path, "index_status", None)
+                    .await
+                    .expect("failed to call index_status")
+                    .result
+                    .expect("missing index_status result");
+            if progress["running"].as_bool() == Some(false) {
+                break progress["indexed"].as_u64().unwrap_or(0);
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("the indexing pass never finished");
+    assert_eq!(indexed, 1, "expected one indexed file");
 
     let search_result = mirage_daemon::ipc::client::IpcClient::call(
         &socket_path,

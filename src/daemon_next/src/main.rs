@@ -88,12 +88,14 @@ async fn main() -> Result<()> {
         .save(&config_path)
         .with_context(|| format!("failed to save config to {}", config_path.display()))?;
 
+    // The embedder decides the vector layout, so the store is opened with its
+    // dimension instead of the configured default.
+    let embedder = create_embedder(&config.models_dir).context("failed to initialize embedder")?;
     let store = Arc::new(
-        LanceDbStore::open(&config)
+        LanceDbStore::open_with_dimension(&config, embedder.dimension())
             .await
             .context("failed to open LanceDB store")?,
     );
-    let embedder = create_embedder(&config.models_dir).context("failed to initialize embedder")?;
     let analytics = Arc::new(Analytics::open(&config).context("failed to open analytics")?);
     let module_manager = Arc::new(ModuleManager::new(&config, None).await);
 
@@ -119,23 +121,11 @@ async fn main() -> Result<()> {
         connectors,
     ));
 
-    let watcher_search = Arc::clone(&unified_search);
-    let watcher = FileWatcher::new(
-        config.roots.clone(),
-        Arc::new(move || {
-            let search = Arc::clone(&watcher_search);
-            tokio::spawn(async move {
-                match search.index_files().await {
-                    Ok(count) => tracing::info!("watcher reindexed {} entries", count),
-                    Err(e) => tracing::warn!("watcher reindex failed: {}", e),
-                }
-            });
-        }),
-    )
-    .ok();
-    if watcher.is_none() {
-        tracing::warn!("failed to start file watcher");
-    }
+    // File system changes only mark the index as stale. Mirage never starts an
+    // indexing pass on its own: the user presses "Start indexing", or a worker is
+    // asked to do the work.
+    let watcher_roots = config.roots.clone();
+    let watcher_state = unified_search.index_state();
 
     let server = IpcServer::new(
         store,
@@ -149,6 +139,25 @@ async fn main() -> Result<()> {
     );
 
     let server_handle = tokio::spawn(async move { server.run().await });
+
+    // Registering a recursive watch walks the tree, which on a home-directory root
+    // takes far longer than the client's startup timeout. The socket is already
+    // accepting requests by now, so this runs off the main task instead of before it.
+    let watcher = tokio::task::spawn_blocking(move || {
+        FileWatcher::new(
+            watcher_roots,
+            Arc::new(move || {
+                tracing::debug!("file system changed, marking the index stale");
+                watcher_state.mark_stale();
+            }),
+        )
+        .ok()
+    })
+    .await
+    .unwrap_or(None);
+    if watcher.is_none() {
+        tracing::warn!("failed to start file watcher");
+    }
 
     tokio::select! {
         result = server_handle => {

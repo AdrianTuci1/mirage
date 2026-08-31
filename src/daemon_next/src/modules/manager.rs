@@ -561,7 +561,7 @@ impl Inner {
             fs::create_dir_all(&extract_tmp)
                 .with_context(|| format!("failed to create tmp dir {}", extract_tmp.display()))?;
 
-            extract_archive(&part_path, &extract_tmp, &archive_format)
+            extract_archive(&part_path, &extract_tmp, &archive_format, &files)
                 .with_context(|| format!("failed to extract archive for {}", manifest_id))?;
 
             verify_extracted_files(&extract_tmp, &files)
@@ -828,9 +828,12 @@ mod tests {
         let ids: Vec<_> = modules.iter().map(|m| m.module_id.as_str()).collect();
         assert!(
             ids.contains(&"onnx_runtime"),
-            "built-in onnx_runtime should appear"
+            "the cached catalog should be merged in"
         );
-        assert!(ids.contains(&"duckdb"), "built-in duckdb should appear");
+        assert!(
+            ids.contains(&"clip_vision_encoder"),
+            "built-in CLIP modules should appear"
+        );
 
         let onnx = modules
             .iter()
