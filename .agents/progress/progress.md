@@ -143,11 +143,17 @@ Daemonul și CLI-ul sunt copiate în `src/client-kmp/package-resources/{macos,wi
 
 ## Blockere
 
-- Buildul KMP nu a rulat pe acest Mac pentru că singurul JDK disponibil este Java 26, iar Gradle 8.14 nu-l suportă. Codul e scris pentru JDK 21 LTS.
-- Packaging-ul nu a fost testat end-to-end; script-urile sunt pregătite, dar necesită JDK 21 + Rust.
+- Nu e blocant: JDK 21 e instalat local (`~/jdk/jdk-21.0.12.1+1`), iar Gradle 8.14 nu merge cu Java 26 (versiunea implicită din `PATH`).
+  Buildul KMP pornește cu `export JAVA_HOME=$(echo $HOME/jdk/jdk-21*/Contents/Home)`.
+- Packaging-ul nu a fost testat end-to-end; script-urile sunt pregătite.
+- **Verificarea compilării Rust este oprită la cererea explicită a utilizatorului** („nu mai compila daemon-ul … verifică doar în cod"):
+  de la `cede56a` încolo, modificările din `src/daemon_next` sunt confirmate doar prin citire + `cargo fmt --check` + `cargo metadata`.
+  `cargo test`, descărcarea reală a arhivei `duckdb` și rularea cu `MIRAGE_DUCKDB_BIN` rămân de făcut.
 
 ## Commit-uri recente
 
+- `42c8bff` — DuckDB ca motor descărcabil (ADR 014): crate scos, CLI rulat ca proces, catalog pinat pe 5 platforme.
+- `22c4992` — profil `dev` Cargo cu `debug = "line-tables-only"` (DWARF complet umfla `target/`).
 - `38cf5ad` — footer indicator cu cerc de progres + filtre surse și RPC `list_connectors`.
 - `3a84d97` — configurator conectori în Settings + fixuri compilare daemon (watcher, PathBuf, Arc connectors).
 - `907ffb9` — packaging scripts, file watcher, explicit cloud download.
