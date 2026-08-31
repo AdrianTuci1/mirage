@@ -1,19 +1,15 @@
 package mirage.desktop.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,188 +18,244 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.Text
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.launch
+import mirage.desktop.platform.centerOnActiveScreen
 import mirage.desktop.ui.theme.MirageTheme
+import mirage.desktop.ui.theme.MirageTokens as T
 import mirage.search.SearchEngine
 import mirage.vault.RemoteVaultManager
 import mirage.vault.ServerConnection
 
 /**
- * Dialog for adding a Mirage server using either a server URL + code or a
- * full Vault URI.
+ * Dialog for adding a Mirage index worker, either by server URL + server code or
+ * by pasting a full Vault URI.
  *
- * The client does not distinguish managed cloud from self-hosted servers.
+ * Follows the "Dialog / Add Server" board: 520x520 undecorated window, 40dp
+ * title bar, heading and subtitle, two compact fields, the HTTPS switch, the
+ * note that answers "what leaves this box?", and Connect pinned to the bottom.
+ *
+ * The client does not distinguish managed cloud from self-hosted workers.
  */
 @Composable
 fun AddServerScreen(
     searchEngine: SearchEngine,
-    onServerAdded: (ServerConnection, RemoteVaultManager) -> Unit,
+    onServerAdded: (ServerConnection, RemoteVaultManager, Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val (x, y) = remember { centerOnActiveScreen(T.dialogWidth, T.serverDialogHeight) }
+    val windowState = rememberWindowState(
+        width = T.dialogWidth,
+        height = T.serverDialogHeight,
+        position = WindowPosition(x.dp, y.dp)
+    )
     Window(
         onCloseRequest = onDismiss,
+        state = windowState,
         title = "Add Server",
-        state = rememberWindowState(width = 520.dp, height = 460.dp)
+        undecorated = true,
+        resizable = false
     ) {
         MirageTheme {
-            Surface(
+            var useUriMode by remember { mutableStateOf(false) }
+            var serverUrl by remember { mutableStateOf("") }
+            var serverCode by remember { mutableStateOf("") }
+            var fullUri by remember { mutableStateOf("") }
+            var useHttps by remember { mutableStateOf(true) }
+            var offload by remember { mutableStateOf(true) }
+            var message by remember { mutableStateOf<String?>(null) }
+            var isError by remember { mutableStateOf(false) }
+            var isConnecting by remember { mutableStateOf(false) }
+            val scope = rememberCoroutineScope()
+
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .background(T.colorBg)
             ) {
-                AddServerContent(
-                    searchEngine = searchEngine,
-                    onServerAdded = onServerAdded,
-                    onDismiss = onDismiss
+                WindowTitleBar(
+                    title = "Add Server",
+                    onClose = onDismiss,
+                    state = windowState,
+                    height = T.dialogTitleBarHeight
                 )
-            }
-        }
-    }
-}
 
-@Composable
-private fun AddServerContent(
-    searchEngine: SearchEngine,
-    onServerAdded: (ServerConnection, RemoteVaultManager) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var useUriMode by remember { mutableStateOf(false) }
-    var serverUrl by remember { mutableStateOf("") }
-    var serverCode by remember { mutableStateOf("") }
-    var useHttps by remember { mutableStateOf(true) }
-    var fullUri by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf<String?>(null) }
-    var isError by remember { mutableStateOf(false) }
-    var isConnecting by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 20.dp)
+                            .padding(bottom = 72.dp),
+                        verticalArrangement = Arrangement.spacedBy(T.spaceSm)
+                    ) {
+                        Text(
+                            text = "Add Server",
+                            style = TextStyle(
+                                fontSize = T.textDialogHeading,
+                                fontWeight = FontWeight.Medium,
+                                color = T.colorTextPrimary
+                            )
+                        )
+                        Text(
+                            text = "Connect to a Mirage worker that indexes your large sources for you.",
+                            style = TextStyle(fontSize = T.textResultMeta, color = T.colorTextSecondary)
+                        )
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = "Add Server",
-            style = MaterialTheme.typography.headlineSmall
-        )
+                        if (useUriMode) {
+                            MirageField(
+                                label = "Vault URI",
+                                value = fullUri,
+                                onValueChange = {
+                                    fullUri = it
+                                    message = null
+                                },
+                                placeholder = "vault://host:port#vault_id=…&key=…"
+                            )
+                        } else {
+                            MirageField(
+                                label = "Server URL",
+                                value = serverUrl,
+                                onValueChange = {
+                                    serverUrl = it
+                                    message = null
+                                },
+                                placeholder = "https://mirage.example.com"
+                            )
+                            MirageField(
+                                label = "Server code",
+                                value = serverCode,
+                                onValueChange = {
+                                    serverCode = it
+                                    message = null
+                                },
+                                placeholder = "my-vault:abc123"
+                            )
+                        }
 
-        if (useUriMode) {
-            OutlinedTextField(
-                value = fullUri,
-                onValueChange = {
-                    fullUri = it
-                    message = null
-                },
-                label = { Text("Vault URI") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-        } else {
-            OutlinedTextField(
-                value = serverUrl,
-                onValueChange = {
-                    serverUrl = it
-                    message = null
-                },
-                label = { Text("Server URL") },
-                placeholder = { Text("https://mirage.example.com") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            OutlinedTextField(
-                value = serverCode,
-                onValueChange = {
-                    serverCode = it
-                    message = null
-                },
-                label = { Text("Server code") },
-                placeholder = { Text("my-vault:abc123") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Switch(
-                    checked = useHttps,
-                    onCheckedChange = { useHttps = it }
-                )
-                Text(
-                    text = "Use HTTPS",
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = {
-                    scope.launch {
-                        isConnecting = true
-                        message = null
-                        try {
-                            val connection = if (useUriMode) {
-                                ServerConnection.fromVaultUri(fullUri)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(T.spaceSm),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = T.spaceXs)
+                        ) {
+                            if (useUriMode) {
+                                Spacer(modifier = Modifier.width(T.spaceLg))
                             } else {
-                                ServerConnection.fromUrlAndCode(serverUrl, serverCode, useHttps)
+                                MirageSwitch(checked = useHttps, onCheckedChange = { useHttps = it })
+                                Text(
+                                    text = "Use HTTPS",
+                                    style = TextStyle(
+                                        fontSize = T.textSettingTitle,
+                                        color = T.colorTextPrimary
+                                    )
+                                )
                             }
-                            val manager = RemoteVaultManager(connection, searchEngine)
-                            manager.syncDeltaIndex()
-                            onServerAdded(connection, manager)
-                        } catch (e: Exception) {
-                            isError = true
-                            message = e.message ?: "Failed to connect to server"
-                        } finally {
-                            isConnecting = false
+                        }
+
+                        MirageNote(
+                            title = "Credentials never leave this device",
+                            text = "The address and code only open the delta-sync API.\n" +
+                                "The worker reads storage with keys configured on itself.",
+                            icon = Icons.Default.Lock
+                        )
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(T.spaceSm),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = T.spaceXs)
+                        ) {
+                            MirageSwitch(checked = offload, onCheckedChange = { offload = it })
+                            Text(
+                                text = "Offload large sources to this worker",
+                                style = TextStyle(fontSize = T.textSettingTitle, color = T.colorTextPrimary)
+                            )
                         }
                     }
-                },
-                enabled = !isConnecting
-            ) {
-                Text("Connect")
+
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(T.colorBg)
+                            .padding(horizontal = 20.dp, vertical = T.spaceMd),
+                        verticalArrangement = Arrangement.spacedBy(T.spaceSm)
+                    ) {
+                        if (isConnecting) {
+                            MirageProgress(progress = 0.65f)
+                            Text(
+                                text = "Connecting\u2026 syncing delta index",
+                                style = TextStyle(fontSize = T.textResultMeta, color = T.colorKeyText)
+                            )
+                        }
+                        message?.let {
+                            Text(
+                                text = it,
+                                style = TextStyle(
+                                    fontSize = T.textResultMeta,
+                                    color = if (isError) T.colorProgressActive else T.colorTextSecondary
+                                )
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            MirageTextButton(label = "Cancel", onClick = onDismiss)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(T.spaceSm),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                MirageTextButton(
+                                    label = if (useUriMode) "Use URL + code" else "Paste full Vault URI",
+                                    onClick = {
+                                        useUriMode = !useUriMode
+                                        message = null
+                                    }
+                                )
+                                MirageButton(
+                                    label = "Connect",
+                                    onClick = {
+                                        scope.launch {
+                                            isConnecting = true
+                                            message = null
+                                            try {
+                                                val connection = if (useUriMode) {
+                                                    ServerConnection.fromVaultUri(fullUri)
+                                                } else {
+                                                    ServerConnection.fromUrlAndCode(
+                                                        url = serverUrl,
+                                                        code = serverCode,
+                                                        isHttps = useHttps
+                                                    )
+                                                }
+                                                val manager = RemoteVaultManager(connection, searchEngine)
+                                                manager.syncDeltaIndex()
+                                                onServerAdded(connection, manager, offload)
+                                            } catch (e: Exception) {
+                                                isError = true
+                                                message = e.message ?: "Failed to connect to server"
+                                            } finally {
+                                                isConnecting = false
+                                            }
+                                        }
+                                    },
+                                    fill = T.colorSelectedBgStrong,
+                                    padH = T.spaceLg,
+                                    padV = T.spaceSm
+                                )
+                            }
+                        }
+                    }
+                }
             }
-
-            TextButton(
-                onClick = {
-                    useUriMode = !useUriMode
-                    message = null
-                },
-                enabled = !isConnecting
-            ) {
-                Text(
-                    if (useUriMode) "Use URL + code" else "Paste full Vault URI"
-                )
-            }
-
-            TextButton(
-                onClick = onDismiss,
-                enabled = !isConnecting
-            ) {
-                Text("Cancel")
-            }
-        }
-
-        if (isConnecting) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        }
-
-        message?.let {
-            Text(
-                text = it,
-                color = if (isError) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-                style = MaterialTheme.typography.bodyMedium
-            )
         }
     }
 }

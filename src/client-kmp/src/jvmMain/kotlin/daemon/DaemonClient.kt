@@ -6,7 +6,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import mirage.search.SearchResult
 import java.net.UnixDomainSocketAddress
 import java.nio.ByteBuffer
@@ -112,9 +114,65 @@ class DaemonClient(
         json.decodeFromJsonElement(DaemonModels.IndexCountResponse2.serializer(), response).count
     }
 
+    /**
+     * Aborts an in-flight module download. The daemon answers with the module
+     * state right after the cancel, which the Modules tab polls anyway.
+     */
+    suspend fun cancelDownload(moduleId: String): DaemonModels.DaemonModuleStatus = withContext(Dispatchers.IO) {
+        val params = json.encodeToJsonElement(DaemonModels.ModuleIdRequest.serializer(), DaemonModels.ModuleIdRequest(moduleId))
+        val response = call("cancel_download", params)
+        json.decodeFromJsonElement(DaemonModels.DaemonModuleStatus.serializer(), response)
+    }
+
+    /** Deletes a downloaded module and its files from disk. */
+    suspend fun removeModule(moduleId: String) = withContext(Dispatchers.IO) {
+        val params = json.encodeToJsonElement(DaemonModels.ModuleIdRequest.serializer(), DaemonModels.ModuleIdRequest(moduleId))
+        call("remove_module", params)
+        Unit
+    }
+
     suspend fun listConnectors(): List<DaemonModels.ConnectorConfig> = withContext(Dispatchers.IO) {
-        val response = call("list_connectors", null)
-        json.decodeFromJsonElement(ListSerializer(DaemonModels.ConnectorConfig.serializer()), response["connectors"]!!)
+        val response = call("list_connectors", null) as JsonObject
+        json.decodeFromJsonElement(
+            ListSerializer(DaemonModels.ConnectorConfig.serializer()),
+            response["connectors"] ?: JsonArray(emptyList())
+        )
+    }
+
+    /**
+     * Progress of the current indexing pass.
+     *
+     * Older daemons do not know the method, so a missing reply is not an error:
+     * the caller falls back to the plain vector count from `status`.
+     */
+    suspend fun indexStatus(): DaemonModels.IndexStatus? = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = call("index_status", null)
+            json.decodeFromJsonElement(DaemonModels.IndexStatus.serializer(), response)
+        }.getOrNull()
+    }
+
+    /** Roots and excluded directories the daemon walks during a pass. */
+    suspend fun indexingSettings(): DaemonModels.IndexingSettings = withContext(Dispatchers.IO) {
+        val response = call("get_indexing_settings", null)
+        json.decodeFromJsonElement(DaemonModels.IndexingSettings.serializer(), response)
+    }
+
+    /**
+     * Persist new indexing inputs. The daemon marks its index stale instead of
+     * starting a pass, so this never embeds anything by itself.
+     */
+    suspend fun updateIndexingSettings(
+        roots: List<String>,
+        excludedDirs: List<String>
+    ): DaemonModels.IndexingSettings = withContext(Dispatchers.IO) {
+        val request = DaemonModels.IndexingSettingsRequest(roots, excludedDirs)
+        val params = json.encodeToJsonElement(
+            DaemonModels.IndexingSettingsRequest.serializer(),
+            request
+        )
+        call("update_indexing_settings", params)
+        DaemonModels.IndexingSettings(roots, excludedDirs)
     }
 
     private fun call(method: String, params: JsonElement?): JsonElement {

@@ -1,10 +1,10 @@
 package mirage.desktop.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,304 +13,655 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.rememberWindowState
-import kotlinx.coroutines.launch
 import mirage.daemon.DaemonModels
+import mirage.desktop.platform.centerOnActiveScreen
 import mirage.desktop.ui.theme.MirageTheme
-import mirage.desktop.ui.theme.MirageTokens
+import mirage.desktop.ui.theme.MirageTokens as T
 import mirage.vault.ServerConnection
 
-private enum class SettingsTab(val label: String) {
-    General("General"),
-    Modules("Modules"),
-    Connectors("Connectors"),
-    Servers("Servers")
+/**
+ * The four categories shown by the centred tab strip.
+ *
+ * The icon sits above the label, matching `L.settingsTabs` on the Penpot board.
+ */
+enum class SettingsTab(val label: String, val icon: ImageVector) {
+    General("General", Icons.Default.Tune),
+    Modules("Modules", Icons.Default.Extension),
+    Connectors("Connectors", Icons.Default.Link),
+    Servers("Servers", Icons.Default.Dns)
 }
+
+/**
+ * Indexing state for the whole vault, as reported by the daemon.
+ *
+ * [progress] is null while no pass is running, which is what the design shows
+ * as the idle row with the "Start indexing" chip. Mirage never starts a pass on
+ * its own, so [indexed] stays at 0 until the user presses it. [stale] means files
+ * changed since the last pass, so the chip offers to run it again.
+ */
+data class IndexingUiState(
+    val indexed: Int = 0,
+    val total: Int? = null,
+    val isRunning: Boolean = false,
+    val stale: Boolean = false
+) {
+    /** Fraction done, or null while the daemon cannot tell us the total yet. */
+    val progress: Float?
+        get() = total?.takeIf { it > 0 }?.let { (indexed.toFloat() / it).coerceIn(0f, 1f) }
+}
+
+/**
+ * User preferences editable from the General tab.
+ */
+data class MiragePrefs(
+    val startAtLogin: Boolean = false,
+    val clipboardIndexing: Boolean = true,
+    val excludedDirs: String = "",
+    val offloadLargeSources: Boolean = true,
+    val offloadThresholdMb: Int = 2048,
+    val offloadedSourceIds: Set<String> = emptySet()
+)
+
+/**
+ * A configured index worker and what the client last saw of it.
+ */
+data class WorkerUiState(
+    val connection: ServerConnection,
+    val connected: Boolean = false,
+    val lastSyncLabel: String? = null,
+    val vectorCount: Int? = null
+)
+
+/**
+ * A source that can be handed to a worker instead of being indexed locally.
+ */
+data class OffloadCandidate(
+    val id: String,
+    val title: String,
+    val description: String
+)
 
 /**
  * Settings window for Mirage.
  *
- * Follows the design system: undecorated tabs, no cards, clean rows.
+ * Follows the "Mirage · Settings" boards: a 960x720 undecorated window with the
+ * macOS title bar painted by us, a centred icon-over-label tab strip, a full
+ * width divider and a 16dp gutter around the body.
  */
 @Composable
 fun SettingsWindow(
-    servers: List<ServerConnection> = emptyList(),
+    indexing: IndexingUiState = IndexingUiState(),
+    onStartIndexing: () -> Unit = {},
+    prefs: MiragePrefs = MiragePrefs(),
+    onPrefsChange: (MiragePrefs) -> Unit = {},
+    workers: List<WorkerUiState> = emptyList(),
     connectors: List<DaemonModels.ConnectorConfig> = emptyList(),
     onConnectorsChange: (List<DaemonModels.ConnectorConfig>) -> Unit = {},
-    modules: List<mirage.desktop.ui.ModuleStatus> = emptyList(),
+    modules: List<ModuleStatus> = emptyList(),
     onDownloadModule: (String) -> Unit = {},
     onCancelModule: (String) -> Unit = {},
+    onRemoveModule: (String) -> Unit = {},
+    onRemoveWorker: (ServerConnection) -> Unit = {},
+    onOffloadSource: (OffloadCandidate) -> Unit = {},
     onAddServer: () -> Unit = {},
+    daemonError: String? = null,
     onClose: () -> Unit,
     onQuit: () -> Unit
 ) {
+    val (x, y) = remember { centerOnActiveScreen(T.settingsWidth, T.settingsHeight) }
+    val windowState = rememberWindowState(
+        width = T.settingsWidth,
+        height = T.settingsHeight,
+        position = WindowPosition(x.dp, y.dp)
+    )
+    var selectedTab by remember { mutableStateOf(SettingsTab.General) }
     Window(
         onCloseRequest = onClose,
+        state = windowState,
         title = "Mirage Settings",
-        state = rememberWindowState(width = 720.dp, height = 560.dp)
+        undecorated = true,
+        resizable = false
     ) {
         MirageTheme {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MirageTokens.colorBg)
-                    .padding(MirageTokens.spaceLg)
-            ) {
-                var selectedTab by remember { mutableStateOf(SettingsTab.General) }
+            SettingsContent(
+                windowState = windowState,
+                selectedTab = selectedTab,
+                onSelectTab = { selectedTab = it },
+                indexing = indexing,
+                prefs = prefs,
+                onPrefsChange = onPrefsChange,
+                onStartIndexing = onStartIndexing,
+                workers = workers,
+                connectors = connectors,
+                onConnectorsChange = onConnectorsChange,
+                modules = modules,
+                onDownloadModule = onDownloadModule,
+                onCancelModule = onCancelModule,
+                onRemoveModule = onRemoveModule,
+                onRemoveWorker = onRemoveWorker,
+                onOffloadSource = onOffloadSource,
+                onAddServer = onAddServer,
+                daemonError = daemonError,
+                onClose = onClose,
+                onQuit = onQuit
+            )
+        }
+    }
+}
 
-                SettingsHeader(
-                    selectedTab = selectedTab,
-                    onTabSelected = { selectedTab = it },
-                    onClose = onClose
+/**
+ * The settings window below the OS frame: title bar, tab strip, divider and the
+ * body of the selected tab.
+ *
+ * Split out of [SettingsWindow] because the window itself cannot be composed
+ * inside a UI test; this is what the screenshot test renders at 960x720.
+ */
+@Composable
+fun SettingsContent(
+    windowState: WindowState,
+    selectedTab: SettingsTab,
+    onSelectTab: (SettingsTab) -> Unit,
+    indexing: IndexingUiState,
+    prefs: MiragePrefs,
+    onPrefsChange: (MiragePrefs) -> Unit,
+    onStartIndexing: () -> Unit,
+    workers: List<WorkerUiState>,
+    connectors: List<DaemonModels.ConnectorConfig>,
+    onConnectorsChange: (List<DaemonModels.ConnectorConfig>) -> Unit,
+    modules: List<ModuleStatus>,
+    onDownloadModule: (String) -> Unit,
+    onCancelModule: (String) -> Unit,
+    onRemoveModule: (String) -> Unit,
+    onRemoveWorker: (ServerConnection) -> Unit,
+    onOffloadSource: (OffloadCandidate) -> Unit,
+    onAddServer: () -> Unit,
+    daemonError: String?,
+    onClose: () -> Unit,
+    onQuit: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(T.colorBg)
+    ) {
+        WindowTitleBar(
+            title = "Mirage Settings",
+            onClose = onClose,
+            state = windowState
+        )
+
+        SettingsTabStrip(selected = selectedTab, onSelect = onSelectTab)
+
+        MirageDivider()
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = T.spaceLg, vertical = T.spaceMd)
+        ) {
+            when (selectedTab) {
+                SettingsTab.General -> GeneralTab(
+                    indexing = indexing,
+                    prefs = prefs,
+                    onPrefsChange = onPrefsChange,
+                    onStartIndexing = onStartIndexing,
+                    daemonError = daemonError,
+                    onQuit = onQuit
                 )
-
-                Spacer(modifier = Modifier.height(MirageTokens.spaceLg))
-
-                when (selectedTab) {
-                    SettingsTab.General -> GeneralTab(onQuit = onQuit)
-                    SettingsTab.Modules -> ModulesTab(
-                        modules = modules,
-                        onDownloadModule = onDownloadModule,
-                        onCancelModule = onCancelModule
-                    )
-                    SettingsTab.Connectors -> ConnectorsTab(
-                        connectors = connectors,
-                        onConnectorsChange = onConnectorsChange
-                    )
-                    SettingsTab.Servers -> ServersTab(
-                        servers = servers,
-                        onAddServer = onAddServer
-                    )
-                }
+                SettingsTab.Modules -> ModulesTab(
+                    indexing = indexing,
+                    modules = modules,
+                    onDownloadModule = onDownloadModule,
+                    onCancelModule = onCancelModule,
+                    onRemoveModule = onRemoveModule,
+                    onStartIndexing = onStartIndexing
+                )
+                SettingsTab.Connectors -> ConnectorsTab(
+                    connectors = connectors,
+                    onConnectorsChange = onConnectorsChange
+                )
+                SettingsTab.Servers -> ServersTab(
+                    workers = workers,
+                    indexing = indexing,
+                    prefs = prefs,
+                    onPrefsChange = onPrefsChange,
+                    connectors = connectors,
+                    onOffloadSource = onOffloadSource,
+                    onRemoveWorker = onRemoveWorker,
+                    onAddServer = onAddServer
+                )
             }
         }
     }
 }
 
+/**
+ * Centred tab strip: 20dp icon over a 14sp label, 40dp apart, with a 2dp
+ * underline on the active tab.
+ */
 @Composable
-private fun SettingsHeader(
-    selectedTab: SettingsTab,
-    onTabSelected: (SettingsTab) -> Unit,
-    onClose: () -> Unit
+private fun SettingsTabStrip(
+    selected: SettingsTab,
+    onSelect: (SettingsTab) -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = T.spaceMd),
+        horizontalArrangement = Arrangement.spacedBy(T.tabStripGap, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.Top
     ) {
+        SettingsTab.entries.forEach { tab ->
+            val isSelected = tab == selected
+            Column(
+                modifier = Modifier
+                    .clickableNoRipple { onSelect(tab) }
+                    .padding(horizontal = T.spaceXs),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(T.spaceSm)
+            ) {
+                Icon(
+                    imageVector = tab.icon,
+                    contentDescription = null,
+                    tint = if (isSelected) T.colorTextPrimary else T.colorTextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = tab.label,
+                    style = TextStyle(
+                        fontSize = T.textSettingTitle,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isSelected) T.colorTextPrimary else T.colorTextSecondary
+                    )
+                )
+                Box(
+                    modifier = Modifier
+                        .size(width = T.tabIndicatorWidth, height = T.tabIndicatorHeight)
+                        .background(
+                            color = if (isSelected) T.colorSelectedBgStrong else Color.Transparent,
+                            shape = RoundedCornerShape(T.tabIndicatorHeight)
+                        )
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Body of a settings tab: a scrollable stack of sections plus an optional
+ * footer anchored to the bottom of the window.
+ *
+ * The 720dp window fits every tab without scrolling today; the scroll column is
+ * there so a long connector or worker list degrades gracefully instead of
+ * clipping. [footer] sits outside it, which is what keeps "Add connector" and
+ * "Add worker" pinned to the foot of the window as drawn on the board.
+ */
+@Composable
+private fun SettingsBody(
+    footer: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .then(if (footer != null) Modifier.padding(bottom = 56.dp) else Modifier),
+            verticalArrangement = Arrangement.spacedBy(T.spaceLg),
+            content = content
+        )
+        if (footer != null) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(T.colorBg)
+                    .padding(top = T.spaceMd),
+                verticalArrangement = Arrangement.spacedBy(T.spaceMd)
+            ) { footer() }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSection(
+    title: String? = null,
+    description: String? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(T.spaceMd)) {
+        if (title != null) SectionTitle(title)
+        if (description != null) {
+            Text(
+                text = description,
+                style = TextStyle(fontSize = T.textSettingDesc, color = T.colorTextSecondary)
+            )
+        }
+        content()
+    }
+}
+/**
+ * General tab: indexing status, application preferences, and Quit anchored at
+ * the bottom of the window.
+ */
+@Composable
+private fun GeneralTab(
+    indexing: IndexingUiState,
+    prefs: MiragePrefs,
+    onPrefsChange: (MiragePrefs) -> Unit,
+    onStartIndexing: () -> Unit,
+    daemonError: String? = null,
+    onQuit: () -> Unit
+) {
+    SettingsBody(
+        footer = {
+            Column(verticalArrangement = Arrangement.spacedBy(T.spaceMd)) {
+                MirageDivider()
+                MirageSettingRow(
+                    title = "Quit Mirage",
+                    description = "Close the application.",
+                    onClick = onQuit,
+                    trailing = {
+                        MirageButton(
+                            label = "Quit",
+                            onClick = onQuit,
+                            fill = T.colorSelectedBgStrong,
+                            padH = T.spaceMd,
+                            padV = 2.dp
+                        )
+                    }
+                )
+            }
+        }
+    ) {
+        SettingsSection(title = "Indexing") {
+            if (!daemonError.isNullOrBlank()) {
+                MirageNote(
+                    title = "The daemon is not responding",
+                    text = daemonError,
+                    icon = Icons.Default.Warning
+                )
+            }
+            IndexingRow(state = indexing, onStartIndexing = onStartIndexing)
+        }
+
+        MirageDivider()
+
+        SettingsSection(title = "Application") {
+            MirageSettingRow(
+                title = "Start at login",
+                description = "Launch Mirage automatically when you log in.",
+                trailing = {
+                    MirageSwitch(
+                        checked = prefs.startAtLogin,
+                        onCheckedChange = { onPrefsChange(prefs.copy(startAtLogin = it)) }
+                    )
+                }
+            )
+            MirageDivider()
+            MirageSettingRow(
+                title = "Clipboard indexing",
+                description = "Keep a searchable history of copied text.",
+                trailing = {
+                    MirageSwitch(
+                        checked = prefs.clipboardIndexing,
+                        onCheckedChange = { onPrefsChange(prefs.copy(clipboardIndexing = it)) }
+                    )
+                }
+            )
+            MirageDivider()
+            MirageField(
+                label = "Excluded directories",
+                value = prefs.excludedDirs,
+                onValueChange = { onPrefsChange(prefs.copy(excludedDirs = it)) },
+                placeholder = "e.g. node_modules, .git, build"
+            )
+        }
+    }
+}
+
+/**
+ * Indexing status block used by the General and Modules tabs.
+ *
+ * While a pass runs it is a label plus a 4dp track; otherwise it is the count
+ * and the chip that starts the pass. The pass never begins by itself.
+ */
+@Composable
+private fun IndexingRow(
+    state: IndexingUiState,
+    onStartIndexing: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(T.spaceSm)) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceLg),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SettingsTab.entries.forEach { tab ->
-                val isSelected = tab == selectedTab
-                Box(
-                    modifier = Modifier.clickable { onTabSelected(tab) }
-                ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = tab.label,
-                            fontSize = MirageTokens.textSettingTitle,
-                            fontWeight = FontWeight.Medium,
-                            color = if (isSelected) MirageTokens.colorTextPrimary else MirageTokens.colorTextSecondary
-                        )
-                        if (isSelected) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(2.dp)
-                                    .background(MirageTokens.colorSelectedBgStrong)
-                            )
-                        }
-                    }
-                }
+            Text(
+                text = state.label(),
+                style = TextStyle(fontSize = T.textResultMeta, color = T.colorTextSecondary)
+            )
+            val progress = state.progress
+            if (state.isRunning) {
+                Text(
+                    text = progress?.let { "${(it * 100).toInt()}%" } ?: "\u2022\u2022\u2022",
+                    style = TextStyle(
+                        fontSize = T.textResultMeta,
+                        fontWeight = FontWeight.Medium,
+                        color = T.colorTextPrimary
+                    )
+                )
+            } else {
+                MirageButton(
+                    label = if (state.stale && state.indexed > 0) "Re-index" else "Start indexing",
+                    onClick = onStartIndexing,
+                    padH = 10.dp,
+                    padV = 4.dp
+                )
             }
         }
-
-        IconButton(onClick = onClose) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Close",
-                tint = MirageTokens.colorTextSecondary
-            )
-        }
+        state.progress?.let { MirageProgress(progress = it) }
     }
 }
 
-@Composable
-private fun GeneralTab(onQuit: () -> Unit) {
-    var excludedDirs by remember { mutableStateOf("") }
-
-    Column(
-        verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd)
-    ) {
-        SettingSwitchRow(
-            title = "Start at login",
-            description = "Launch Mirage automatically when you log in.",
-            checked = false,
-            onCheckedChange = {}
-        )
-        HorizontalDivider(color = MirageTokens.colorBorder)
-        SettingSwitchRow(
-            title = "Clipboard indexing",
-            description = "Keep a searchable history of copied text.",
-            checked = true,
-            onCheckedChange = {}
-        )
-        HorizontalDivider(color = MirageTokens.colorBorder)
-        SettingInputRow(
-            title = "Excluded directories",
-            description = "Comma-separated paths relative to the vault root.",
-            value = excludedDirs,
-            placeholder = "e.g. node_modules, .git, build",
-            onValueChange = { excludedDirs = it }
-        )
-        HorizontalDivider(color = MirageTokens.colorBorder)
-        SettingActionRow(
-            title = "Quit Mirage",
-            description = "Close the application.",
-            onClick = onQuit
-        )
+/** "Indexing… 12,480 of 20,000 files" while running, "12,480 indexed" when idle. */
+private fun IndexingUiState.label(): String {
+    val indexedText = indexed.grouped()
+    return when {
+        isRunning && total != null -> "Indexing\u2026  $indexedText of ${total.grouped()} files"
+        isRunning -> "Indexing\u2026  $indexedText files"
+        indexed == 0 -> "Nothing indexed yet"
+        else -> "$indexedText indexed"
     }
 }
 
+/** Groups thousands with a comma, e.g. 12480 -> "12,480". */
+private fun Int.grouped(): String =
+    toString().reversed().chunked(3).joinToString(",").reversed()
+
+/**
+ * Modules tab: the on-device models that can be downloaded, plus the indexing
+ * counter so the tab is useful while a pass is running.
+ */
 @Composable
 private fun ModulesTab(
-    modules: List<mirage.desktop.ui.ModuleStatus> = emptyList(),
-    onDownloadModule: (String) -> Unit = {},
-    onCancelModule: (String) -> Unit = {}
+    indexing: IndexingUiState,
+    modules: List<ModuleStatus>,
+    onDownloadModule: (String) -> Unit,
+    onCancelModule: (String) -> Unit,
+    onRemoveModule: (String) -> Unit,
+    onStartIndexing: () -> Unit
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd)
-    ) {
-        if (modules.isEmpty()) {
-            Text(
-                text = "No modules available.",
-                fontSize = MirageTokens.textSettingDesc,
-                color = MirageTokens.colorTextSecondary
-            )
-        } else {
-            modules.forEachIndexed { index, module ->
-                ModuleDownloadRow(
-                    name = module.label,
-                    status = module.statusLabel(),
-                    progress = module.progress,
-                    onClick = { onDownloadModule(module.id) },
-                    onCancel = { onCancelModule(module.id) }
+    SettingsBody {
+        SettingsSection(
+            title = "On-device models",
+            description = "Models are downloaded once and run locally. Nothing is sent to a server to use them."
+        ) {
+            if (modules.isEmpty()) {
+                Text(
+                    text = "No modules available.",
+                    style = TextStyle(fontSize = T.textSettingDesc, color = T.colorTextSecondary)
                 )
-                if (index < modules.lastIndex) {
-                    HorizontalDivider(color = MirageTokens.colorBorder)
+            } else {
+                modules.forEachIndexed { index, module ->
+                    ModuleRow(
+                        module = module,
+                        onDownload = { onDownloadModule(module.id) },
+                        onCancel = { onCancelModule(module.id) },
+                        onRemove = { onRemoveModule(module.id) }
+                    )
+                    if (index < modules.lastIndex) MirageDivider()
                 }
             }
         }
+
+        MirageDivider()
+
+        SettingsSection {
+            IndexingRow(state = indexing, onStartIndexing = onStartIndexing)
+        }
+    }
+}
+
+/**
+ * Module row: name, state label, an action chip and a 4dp download track.
+ */
+@Composable
+private fun ModuleRow(
+    module: ModuleStatus,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onRemove: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(T.spaceSm)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(T.spaceSm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MirageRowLabel(title = module.label, description = null, modifier = Modifier.weight(1f))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(T.spaceSm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = module.statusLabel(),
+                    style = TextStyle(
+                        fontSize = T.textResultMeta,
+                        fontWeight = if (module.ready) FontWeight.Medium else FontWeight.Normal,
+                        color = if (module.ready) T.colorTextPrimary else T.colorTextSecondary
+                    )
+                )
+                when {
+                    module.ready -> MirageTextButton(label = "Remove", onClick = onRemove)
+                    module.progress != null -> MirageTextButton(label = "Cancel", onClick = onCancel)
+                    else -> MirageButton(
+                        label = "Download",
+                        onClick = onDownload,
+                        fill = T.colorSelectedBgStrong,
+                        padH = T.spaceSm,
+                        padV = 2.dp
+                    )
+                }
+            }
+        }
+        module.progress?.let { MirageProgress(progress = it) }
     }
 }
 
 private fun ModuleStatus.statusLabel(): String = when {
     ready -> "Ready"
-    progress != null -> "Downloading..."
+    progress != null -> "Downloading\u2026 ${(progress * 100).toInt()}%"
     else -> "Not installed"
 }
-
+/**
+ * Connectors tab: the accounts whose contents Mirage is allowed to read, and the
+ * editor dialog used to add or change one.
+ *
+ * Credentials are typed into this window and handed to the local daemon only;
+ * they are never forwarded to a worker (see the note on the Servers tab).
+ */
 @Composable
 private fun ConnectorsTab(
     connectors: List<DaemonModels.ConnectorConfig>,
     onConnectorsChange: (List<DaemonModels.ConnectorConfig>) -> Unit
 ) {
     var editing by remember { mutableStateOf<DaemonModels.ConnectorConfig?>(null) }
-    val scope = rememberCoroutineScope()
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd)
-    ) {
-        if (connectors.isEmpty()) {
-            Text(
-                text = "No connectors configured. Add one to index cloud or network storage.",
-                fontSize = MirageTokens.textSettingDesc,
-                color = MirageTokens.colorTextSecondary
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm)
+    SettingsBody(
+        footer = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
             ) {
-                items(connectors, key = { it.id }) { connector ->
-                    ConnectorRow(
+                MirageButton(
+                    label = "Add connector",
+                    onClick = { editing = newConnector() },
+                    leadingIcon = Icons.Default.Add
+                )
+            }
+        }
+    ) {
+        SettingsSection(title = "Connected accounts") {
+            if (connectors.isEmpty()) {
+                Text(
+                    text = "No connectors configured. Add one to index cloud or network storage.",
+                    style = TextStyle(fontSize = T.textSettingDesc, color = T.colorTextSecondary)
+                )
+            } else {
+                connectors.forEach { connector ->
+                    ConnectorCard(
                         connector = connector,
                         onToggle = { enabled ->
-                            val updated = connectors.map {
-                                if (it.id == connector.id) it.copy(enabled = enabled) else it
-                            }
-                            onConnectorsChange(updated)
+                            onConnectorsChange(
+                                connectors.map {
+                                    if (it.id == connector.id) it.copy(enabled = enabled) else it
+                                }
+                            )
                         },
                         onEdit = { editing = connector },
                         onDelete = {
                             onConnectorsChange(connectors.filter { it.id != connector.id })
                         }
-                    )
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .background(color = MirageTokens.colorKeyBg, shape = RoundedCornerShape(MirageTokens.radiusSm))
-                    .clickable { editing = newConnector() }
-                    .padding(horizontal = MirageTokens.spaceMd, vertical = MirageTokens.spaceSm)
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add",
-                        tint = MirageTokens.colorTextPrimary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = "Add connector",
-                        fontSize = MirageTokens.textSettingTitle,
-                        color = MirageTokens.colorTextPrimary
                     )
                 }
             }
@@ -322,22 +673,21 @@ private fun ConnectorsTab(
             config = config,
             onDismiss = { editing = null },
             onSave = { saved ->
-                scope.launch {
-                    val updated = if (connectors.any { it.id == saved.id }) {
-                        connectors.map { if (it.id == saved.id) saved else it }
-                    } else {
-                        connectors + saved
-                    }
-                    onConnectorsChange(updated)
-                    editing = null
+                val updated = if (connectors.any { it.id == saved.id }) {
+                    connectors.map { if (it.id == saved.id) saved else it }
+                } else {
+                    connectors + saved
                 }
+                onConnectorsChange(updated)
+                editing = null
             }
         )
     }
 }
 
+/** Connector card as drawn by `L.connectorRow`: identity left, actions right. */
 @Composable
-private fun ConnectorRow(
+private fun ConnectorCard(
     connector: DaemonModels.ConnectorConfig,
     onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit,
@@ -346,139 +696,239 @@ private fun ConnectorRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(color = MirageTokens.colorKeyBg, shape = RoundedCornerShape(MirageTokens.radiusSm))
-            .padding(horizontal = MirageTokens.spaceMd, vertical = MirageTokens.spaceSm),
+            .background(color = T.colorKeyBg, shape = RoundedCornerShape(T.radiusSm))
+            .padding(horizontal = T.spaceMd, vertical = T.spaceSm),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
+            horizontalArrangement = Arrangement.spacedBy(T.spaceSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = connectorKindIcon(connector.kind),
                 contentDescription = null,
-                tint = MirageTokens.colorTextSecondary,
+                tint = T.colorTextSecondary,
                 modifier = Modifier.size(20.dp)
             )
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = connector.name.ifBlank { connector.id },
-                    fontSize = MirageTokens.textSettingTitle,
-                    fontWeight = FontWeight.Medium,
-                    color = MirageTokens.colorTextPrimary
+                    style = TextStyle(
+                        fontSize = T.textSettingTitle,
+                        fontWeight = FontWeight.Medium,
+                        color = T.colorTextPrimary
+                    )
                 )
                 Text(
-                    text = "${connectorKindLabel(connector.kind)} • ${connector.roots.size} roots",
-                    fontSize = MirageTokens.textSettingDesc,
-                    color = MirageTokens.colorTextSecondary
+                    text = "${connectorKindLabel(connector.kind)} \u2022 ${connector.roots.size} roots",
+                    style = TextStyle(fontSize = T.textResultMeta, color = T.colorTextSecondary)
                 )
             }
         }
         Row(
-            horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
+            horizontalArrangement = Arrangement.spacedBy(T.spaceSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Switch(
-                checked = connector.enabled,
-                onCheckedChange = onToggle
-            )
-            IconButton(onClick = onEdit) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit",
-                    tint = MirageTokens.colorTextSecondary
-                )
-            }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MirageTokens.colorTextSecondary
-                )
-            }
+            MirageSwitch(checked = connector.enabled, onCheckedChange = onToggle)
+            RowIconButton(icon = Icons.Default.Edit, description = "Edit", onClick = onEdit)
+            RowIconButton(icon = Icons.Default.Delete, description = "Delete", onClick = onDelete)
         }
     }
 }
 
+/** 40x40 borderless icon button, the shape used inside connector and worker rows. */
+@Composable
+private fun RowIconButton(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(RoundedCornerShape(T.radiusSm))
+            .clickableNoRipple(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = T.colorTextSecondary,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+/**
+ * Connector editor: its own 520x720 window, per the "Dialog / Connector Editor"
+ * board. The Compose column needs ~700dp of fields, so the window is taller than
+ * it is wide and the actions stay pinned to the bottom.
+ */
 @Composable
 private fun ConnectorEditorDialog(
     config: DaemonModels.ConnectorConfig,
     onDismiss: () -> Unit,
     onSave: (DaemonModels.ConnectorConfig) -> Unit
 ) {
+    val (x, y) = remember { centerOnActiveScreen(T.dialogWidth, T.connectorDialogHeight) }
+    val windowState = rememberWindowState(
+        width = T.dialogWidth,
+        height = T.connectorDialogHeight,
+        position = WindowPosition(x.dp, y.dp)
+    )
     Window(
         onCloseRequest = onDismiss,
+        state = windowState,
         title = if (config.name.isBlank()) "Add connector" else "Edit connector",
-        state = rememberWindowState(width = 520.dp, height = 640.dp)
+        undecorated = true,
+        resizable = false
     ) {
         MirageTheme {
-            ConnectorEditorContent(
-                config = config,
-                onDismiss = onDismiss,
-                onSave = onSave
-            )
-        }
-    }
-}
+            var name by remember { mutableStateOf(config.name) }
+            var kind by remember { mutableStateOf(config.kind) }
+            var roots by remember { mutableStateOf(config.roots.joinToString(", ")) }
+            var enabled by remember { mutableStateOf(config.enabled) }
+            var credentials by remember { mutableStateOf(config.credentials) }
+            var kindMenuExpanded by remember { mutableStateOf(false) }
 
-@Composable
-private fun ConnectorEditorContent(
-    config: DaemonModels.ConnectorConfig,
-    onDismiss: () -> Unit,
-    onSave: (DaemonModels.ConnectorConfig) -> Unit
-) {
-    var name by remember { mutableStateOf(config.name) }
-    var kind by remember { mutableStateOf(config.kind) }
-    var roots by remember { mutableStateOf(config.roots.joinToString(", ")) }
-    var enabled by remember { mutableStateOf(config.enabled) }
+            val fields = credentialFieldsFor(kind)
+            val values = credentialValues(credentials)
 
-    var accessKey by remember { mutableStateOf(config.credentials.accessKey ?: "") }
-    var secretKey by remember { mutableStateOf(config.credentials.secretKey ?: "") }
-    var region by remember { mutableStateOf(config.credentials.region ?: "") }
-    var endpoint by remember { mutableStateOf(config.credentials.endpoint ?: "") }
-    var bucket by remember { mutableStateOf(config.credentials.bucket ?: "") }
-    var oauthToken by remember { mutableStateOf(config.credentials.oauthToken ?: "") }
-    var username by remember { mutableStateOf(config.credentials.username ?: "") }
-    var password by remember { mutableStateOf(config.credentials.password ?: "") }
-    var host by remember { mutableStateOf(config.credentials.host ?: "") }
-    var share by remember { mutableStateOf(config.credentials.share ?: "") }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(T.colorBg)
+            ) {
+                WindowTitleBar(
+                    title = if (config.name.isBlank()) "Add connector" else "Edit connector",
+                    onClose = onDismiss,
+                    state = windowState,
+                    height = T.dialogTitleBarHeight
+                )
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(MirageTokens.spaceLg),
-        verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd)
-    ) {
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text("Name") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp)
+                            .padding(bottom = 72.dp),
+                        verticalArrangement = Arrangement.spacedBy(T.spaceSm)
+                    ) {
+                        MirageField(label = "Name", value = name, onValueChange = { name = it })
+                        MirageField(
+                            label = "Kind",
+                            value = connectorKindLabel(kind),
+                            onValueChange = {},
+                            trailing = "Change",
+                            onTrailingClick = { kindMenuExpanded = true }
+                        )
+                        MirageField(
+                            label = "Roots",
+                            value = roots,
+                            onValueChange = { roots = it },
+                            placeholder = "Comma-separated prefixes or paths",
+                            singleLine = false
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(T.spaceSm),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = T.spaceXs)
+                        ) {
+                            MirageSwitch(checked = enabled, onCheckedChange = { enabled = it })
+                            Text(
+                                text = "Enabled",
+                                style = TextStyle(fontSize = T.textSettingTitle, color = T.colorTextPrimary)
+                            )
+                        }
 
-        var kindMenuExpanded by remember { mutableStateOf(false) }
-        Box {
-            OutlinedTextField(
-                value = connectorKindLabel(kind),
-                onValueChange = {},
-                label = { Text("Kind") },
-                modifier = Modifier.fillMaxWidth(),
-                readOnly = true,
-                trailingIcon = {
-                    TextButton(onClick = { kindMenuExpanded = true }) {
-                        Text("Change")
+                        MirageDivider()
+
+                        Text(
+                            text = "Credentials",
+                            style = TextStyle(
+                                fontSize = T.textSettingTitle,
+                                fontWeight = FontWeight.Medium,
+                                color = T.colorTextPrimary
+                            )
+                        )
+                        fields.forEach { spec ->
+                            MirageField(
+                                label = spec.label,
+                                value = values[spec.key].orEmpty(),
+                                onValueChange = { credentials = credentials.with(spec.key, it) },
+                                isPassword = spec.secret
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(T.colorBg)
+                            .padding(horizontal = 20.dp, vertical = T.spaceMd),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MirageTextButton(label = "Cancel", onClick = onDismiss)
+                        MirageButton(
+                            label = "Save",
+                            onClick = {
+                                onSave(
+                                    config.copy(
+                                        name = name,
+                                        kind = kind,
+                                        roots = roots.split(",")
+                                            .map { it.trim() }
+                                            .filter { it.isNotBlank() },
+                                        enabled = enabled,
+                                        credentials = credentials
+                                    )
+                                )
+                            },
+                            fill = T.colorSelectedBgStrong,
+                            padH = T.spaceLg,
+                            padV = T.spaceSm
+                        )
                     }
                 }
-            )
+            }
+
             DropdownMenu(
                 expanded = kindMenuExpanded,
-                onDismissRequest = { kindMenuExpanded = false }
+                onDismissRequest = { kindMenuExpanded = false },
+                modifier = Modifier.width(T.menuWidth),
+                containerColor = T.colorHoverBg,
+                shape = RoundedCornerShape(T.radiusMd),
+                offset = DpOffset(20.dp, 0.dp)
             ) {
                 DaemonModels.ConnectorKind.entries.forEach { entry ->
+                    val isSelected = entry == kind
                     DropdownMenuItem(
-                        text = { Text(connectorKindLabel(entry)) },
+                        text = {
+                            Text(
+                                text = connectorKindLabel(entry),
+                                style = TextStyle(
+                                    fontSize = T.textSettingTitle,
+                                    fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                                    color = T.colorTextPrimary
+                                )
+                            )
+                        },
+                        trailingIcon = if (isSelected) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = T.colorTextPrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        } else {
+                            null
+                        },
                         onClick = {
                             kind = entry
                             kindMenuExpanded = false
@@ -487,391 +937,300 @@ private fun ConnectorEditorContent(
                 }
             }
         }
-
-        OutlinedTextField(
-            value = roots,
-            onValueChange = { roots = it },
-            label = { Text("Roots") },
-            placeholder = { Text("Comma-separated prefixes or paths") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = false,
-            minLines = 2
-        )
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Switch(
-                checked = enabled,
-                onCheckedChange = { enabled = it }
-            )
-            Text(
-                text = "Enabled",
-                modifier = Modifier.padding(start = MirageTokens.spaceSm)
-            )
-        }
-
-        HorizontalDivider(color = MirageTokens.colorBorder)
-
-        Text(
-            text = "Credentials",
-            fontSize = MirageTokens.textSettingTitle,
-            fontWeight = FontWeight.Medium,
-            color = MirageTokens.colorTextPrimary
-        )
-
-        when (kind) {
-            DaemonModels.ConnectorKind.S3 -> {
-                CredentialField(bucket, { bucket = it }, "Bucket")
-                CredentialField(endpoint, { endpoint = it }, "Endpoint (optional)")
-                CredentialField(region, { region = it }, "Region")
-                CredentialField(accessKey, { accessKey = it }, "Access key")
-                CredentialField(secretKey, { secretKey = it }, "Secret key", isPassword = true)
-            }
-            DaemonModels.ConnectorKind.DROPBOX,
-            DaemonModels.ConnectorKind.GOOGLE_DRIVE -> {
-                CredentialField(oauthToken, { oauthToken = it }, "OAuth token", isPassword = true)
-            }
-            DaemonModels.ConnectorKind.SMB -> {
-                CredentialField(host, { host = it }, "Host")
-                CredentialField(share, { share = it }, "Share")
-                CredentialField(username, { username = it }, "Username")
-                CredentialField(password, { password = it }, "Password", isPassword = true)
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd)
-        ) {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Box(
-                modifier = Modifier
-                    .background(color = MirageTokens.colorSelectedBgStrong, shape = RoundedCornerShape(MirageTokens.radiusSm))
-                    .clickable {
-                        val credentials = DaemonModels.ConnectorCredentials(
-                            accessKey = accessKey.takeIf { it.isNotBlank() },
-                            secretKey = secretKey.takeIf { it.isNotBlank() },
-                            region = region.takeIf { it.isNotBlank() },
-                            endpoint = endpoint.takeIf { it.isNotBlank() },
-                            bucket = bucket.takeIf { it.isNotBlank() },
-                            oauthToken = oauthToken.takeIf { it.isNotBlank() },
-                            username = username.takeIf { it.isNotBlank() },
-                            password = password.takeIf { it.isNotBlank() },
-                            host = host.takeIf { it.isNotBlank() },
-                            share = share.takeIf { it.isNotBlank() }
-                        )
-                        val saved = config.copy(
-                            name = name,
-                            kind = kind,
-                            roots = roots.split(",")
-                                .map { it.trim() }
-                                .filter { it.isNotBlank() },
-                            enabled = enabled,
-                            credentials = credentials
-                        )
-                        onSave(saved)
-                    }
-                    .padding(horizontal = MirageTokens.spaceMd, vertical = MirageTokens.spaceSm)
-            ) {
-                Text(
-                    text = "Save",
-                    fontSize = MirageTokens.textSettingTitle,
-                    color = MirageTokens.colorTextPrimary
-                )
-            }
-        }
     }
 }
 
-@Composable
-private fun CredentialField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    isPassword: Boolean = false
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        visualTransformation = if (isPassword) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None
-    )
+/** One credential input of the connector editor. */
+private data class CredentialSpec(val key: String, val label: String, val secret: Boolean = false)
+
+private fun credentialFieldsFor(kind: DaemonModels.ConnectorKind): List<CredentialSpec> =
+    when (kind) {
+        DaemonModels.ConnectorKind.S3 -> listOf(
+            CredentialSpec("bucket", "Bucket"),
+            CredentialSpec("endpoint", "Endpoint (optional)"),
+            CredentialSpec("region", "Region"),
+            CredentialSpec("accessKey", "Access key"),
+            CredentialSpec("secretKey", "Secret key", secret = true)
+        )
+        DaemonModels.ConnectorKind.DROPBOX -> listOf(
+            CredentialSpec("oauthToken", "OAuth token", secret = true)
+        )
+        DaemonModels.ConnectorKind.GOOGLE_DRIVE -> listOf(
+            CredentialSpec("oauthToken", "OAuth token", secret = true)
+        )
+        DaemonModels.ConnectorKind.SMB -> listOf(
+            CredentialSpec("host", "Host"),
+            CredentialSpec("share", "Share"),
+            CredentialSpec("username", "Username"),
+            CredentialSpec("password", "Password", secret = true)
+        )
+    }
+
+private fun credentialValues(creds: DaemonModels.ConnectorCredentials): Map<String, String> = mapOf(
+    "bucket" to creds.bucket.orEmpty(),
+    "endpoint" to creds.endpoint.orEmpty(),
+    "region" to creds.region.orEmpty(),
+    "accessKey" to creds.accessKey.orEmpty(),
+    "secretKey" to creds.secretKey.orEmpty(),
+    "oauthToken" to creds.oauthToken.orEmpty(),
+    "username" to creds.username.orEmpty(),
+    "password" to creds.password.orEmpty(),
+    "host" to creds.host.orEmpty(),
+    "share" to creds.share.orEmpty()
+)
+
+private fun DaemonModels.ConnectorCredentials.with(
+    key: String,
+    value: String
+): DaemonModels.ConnectorCredentials {
+    val trimmed = value.takeIf { it.isNotBlank() }
+    return when (key) {
+        "bucket" -> copy(bucket = trimmed)
+        "endpoint" -> copy(endpoint = trimmed)
+        "region" -> copy(region = trimmed)
+        "accessKey" -> copy(accessKey = trimmed)
+        "secretKey" -> copy(secretKey = trimmed)
+        "oauthToken" -> copy(oauthToken = trimmed)
+        "username" -> copy(username = trimmed)
+        "password" -> copy(password = trimmed)
+        "host" -> copy(host = trimmed)
+        "share" -> copy(share = trimmed)
+        else -> this
+    }
 }
 
-private fun newConnector(): DaemonModels.ConnectorConfig {
-    return DaemonModels.ConnectorConfig(
-        id = java.util.UUID.randomUUID().toString(),
-        name = "",
-        kind = DaemonModels.ConnectorKind.S3,
-        enabled = true,
-        roots = emptyList(),
-        credentials = DaemonModels.ConnectorCredentials()
-    )
-}
+private fun newConnector(): DaemonModels.ConnectorConfig = DaemonModels.ConnectorConfig(
+    id = java.util.UUID.randomUUID().toString(),
+    name = "",
+    kind = DaemonModels.ConnectorKind.S3,
+    enabled = true,
+    roots = emptyList(),
+    credentials = DaemonModels.ConnectorCredentials()
+)
 
-private fun connectorKindIcon(kind: DaemonModels.ConnectorKind) = when (kind) {
+private fun connectorKindIcon(kind: DaemonModels.ConnectorKind): ImageVector = when (kind) {
     DaemonModels.ConnectorKind.S3 -> Icons.Default.Storage
     DaemonModels.ConnectorKind.DROPBOX,
     DaemonModels.ConnectorKind.GOOGLE_DRIVE -> Icons.Default.Cloud
     DaemonModels.ConnectorKind.SMB -> Icons.Default.Folder
 }
 
-private fun connectorKindLabel(kind: DaemonModels.ConnectorKind) = when (kind) {
+private fun connectorKindLabel(kind: DaemonModels.ConnectorKind): String = when (kind) {
     DaemonModels.ConnectorKind.S3 -> "S3 / R2"
     DaemonModels.ConnectorKind.DROPBOX -> "Dropbox"
     DaemonModels.ConnectorKind.GOOGLE_DRIVE -> "Google Drive"
     DaemonModels.ConnectorKind.SMB -> "SMB / NAS"
 }
-
+/**
+ * Servers tab: the index workers this client pulls delta indexes from, and which
+ * sources are handed to them.
+ *
+ * A worker holds its own storage credentials, set in its own admin console. What
+ * crosses the wire is the compressed delta index (paths plus vectors), never the
+ * files and never the keys typed into the Connectors tab.
+ */
 @Composable
 private fun ServersTab(
-    servers: List<ServerConnection>,
+    workers: List<WorkerUiState>,
+    indexing: IndexingUiState,
+    prefs: MiragePrefs,
+    onPrefsChange: (MiragePrefs) -> Unit,
+    connectors: List<DaemonModels.ConnectorConfig>,
+    onOffloadSource: (OffloadCandidate) -> Unit,
+    onRemoveWorker: (ServerConnection) -> Unit,
     onAddServer: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceMd)
-    ) {
-        if (servers.isEmpty()) {
-            Text(
-                text = "No servers connected.",
-                fontSize = MirageTokens.textSettingDesc,
-                color = MirageTokens.colorTextSecondary
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm)
-            ) {
-                items(servers, key = { "${it.host}:${it.port}:${it.vaultId}" }) { server ->
-                    ServerRow(server = server)
+    val remoteSources = connectors
+        .filter { it.kind != DaemonModels.ConnectorKind.SMB || it.enabled }
+        .filter { it.enabled }
+        .map {
+            OffloadCandidate(
+                id = it.id,
+                title = "${connectorKindLabel(it.kind)} \u2022 ${it.name.ifBlank { it.id }}",
+                description = if (it.roots.isEmpty()) {
+                    "whole account"
+                } else {
+                    it.roots.joinToString(", ")
                 }
-            }
+            )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .background(color = MirageTokens.colorKeyBg, shape = RoundedCornerShape(MirageTokens.radiusSm))
-                    .clickable(onClick = onAddServer)
-                    .padding(horizontal = MirageTokens.spaceMd, vertical = MirageTokens.spaceSm)
+    SettingsBody(
+        footer = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add",
-                        tint = MirageTokens.colorTextPrimary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = "Add server",
-                        fontSize = MirageTokens.textSettingTitle,
-                        color = MirageTokens.colorTextPrimary
+                MirageButton(
+                    label = "Add worker",
+                    onClick = onAddServer,
+                    leadingIcon = Icons.Default.Add
+                )
+            }
+        }
+    ) {
+        SettingsSection(
+            title = "Index workers",
+            description = "A worker indexes large sources next to the data and sends back only the " +
+                "compressed delta index. Small and medium sources always stay on this device."
+        ) {
+            if (workers.isEmpty()) {
+                Text(
+                    text = "No workers connected. Everything is indexed on this device.",
+                    style = TextStyle(fontSize = T.textSettingDesc, color = T.colorTextSecondary)
+                )
+            } else {
+                workers.forEach { worker ->
+                    WorkerCard(
+                        worker = worker,
+                        onRemove = { onRemoveWorker(worker.connection) }
                     )
                 }
             }
         }
-    }
-}
 
-@Composable
-private fun SettingSwitchRow(
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = title,
-                fontSize = MirageTokens.textSettingTitle,
-                fontWeight = FontWeight.Medium,
-                color = MirageTokens.colorTextPrimary
+        MirageDivider()
+
+        SettingsSection(title = "Offload") {
+            MirageSettingRow(
+                title = "Index large sources remotely",
+                description = if (workers.isEmpty()) {
+                    "Add a worker first \u2014 sources above the threshold are sent to a worker instead of this machine."
+                } else {
+                    "Sources above the threshold go to a worker instead of this machine."
+                },
+                trailing = {
+                    MirageSwitch(
+                        checked = prefs.offloadLargeSources && workers.isNotEmpty(),
+                        onCheckedChange = { onPrefsChange(prefs.copy(offloadLargeSources = it)) }
+                    )
+                }
             )
-            Text(
-                text = description,
-                fontSize = MirageTokens.textSettingDesc,
-                color = MirageTokens.colorTextSecondary
+
+            MirageNote(
+                title = "Storage credentials stay on this device",
+                text = "Mirage shares bucket names, roots and file filters with the worker \u2014 never keys or tokens.\n" +
+                    "The worker signs into S3, Dropbox or the NAS with its own credentials, set in its admin console.",
+                icon = Icons.Default.Lock
             )
+
+            if (prefs.offloadLargeSources && workers.isNotEmpty()) {
+                remoteSources.forEach { candidate ->
+                    val offloaded = candidate.id in prefs.offloadedSourceIds
+                    MirageSettingRow(
+                        title = candidate.title,
+                        description = candidate.description + if (offloaded) {
+                            " \u2022 sent to ${workers.first().connection.host}"
+                        } else {
+                            " \u2022 indexed on this device"
+                        },
+                        trailing = {
+                            MirageButton(
+                                label = if (offloaded) "Index here" else "Offload",
+                                onClick = { onOffloadSource(candidate) },
+                                fill = if (offloaded) T.colorKeyBg else T.colorSelectedBgStrong,
+                                padH = T.spaceSm,
+                                padV = 2.dp
+                            )
+                        }
+                    )
+                }
+            }
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
-    }
-}
 
-@Composable
-private fun SettingInputRow(
-    title: String,
-    description: String,
-    value: String,
-    placeholder: String,
-    onValueChange: (String) -> Unit
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm)
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = title,
-                fontSize = MirageTokens.textSettingTitle,
-                fontWeight = FontWeight.Medium,
-                color = MirageTokens.colorTextPrimary
-            )
-            Text(
-                text = description,
-                fontSize = MirageTokens.textSettingDesc,
-                color = MirageTokens.colorTextSecondary
-            )
+        if (indexing.isRunning) {
+            MirageDivider()
+            SettingsSection {
+                IndexingRow(state = indexing, onStartIndexing = {})
+            }
         }
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = { Text(placeholder) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
     }
 }
 
+/** Worker card as drawn by `L.workerRow`: identity left, status right. */
 @Composable
-private fun SettingActionRow(
-    title: String,
-    description: String,
-    onClick: () -> Unit
+private fun WorkerCard(
+    worker: WorkerUiState,
+    onRemove: () -> Unit
 ) {
+    val connection = worker.connection
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .background(color = T.colorKeyBg, shape = RoundedCornerShape(T.radiusSm))
+            .padding(horizontal = T.spaceLg, vertical = T.spaceMd),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = title,
-                fontSize = MirageTokens.textSettingTitle,
-                fontWeight = FontWeight.Medium,
-                color = MirageTokens.colorTextPrimary
-            )
-            Text(
-                text = description,
-                fontSize = MirageTokens.textSettingDesc,
-                color = MirageTokens.colorTextSecondary
-            )
-        }
-    }
-}
-
-@Composable
-private fun ModuleDownloadRow(
-    name: String,
-    status: String,
-    progress: Float?,
-    onClick: () -> Unit = {},
-    onCancel: () -> Unit = {}
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm)
-    ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(T.spaceMd),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = name,
-                fontSize = MirageTokens.textSettingTitle,
-                fontWeight = FontWeight.Medium,
-                color = MirageTokens.colorTextPrimary
+            Icon(
+                imageVector = Icons.Default.Dns,
+                contentDescription = null,
+                tint = T.colorTextSecondary,
+                modifier = Modifier.size(20.dp)
             )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(MirageTokens.spaceSm),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = status,
-                    fontSize = MirageTokens.textSettingDesc,
-                    color = if (status == "Ready") MirageTokens.colorTextPrimary else MirageTokens.colorTextSecondary
-                )
-                if (status == "Not installed") {
-                    Box(
-                        modifier = Modifier
-                            .background(color = MirageTokens.colorSelectedBgStrong, shape = RoundedCornerShape(MirageTokens.radiusSm))
-                            .clickable(onClick = onClick)
-                            .padding(horizontal = MirageTokens.spaceSm, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "Download",
-                            fontSize = MirageTokens.textSettingDesc,
-                            color = MirageTokens.colorTextPrimary
-                        )
-                    }
-                } else if (status == "Downloading...") {
-                    Text(
-                        text = "Cancel",
-                        fontSize = MirageTokens.textSettingDesc,
-                        color = MirageTokens.colorTextSecondary,
-                        modifier = Modifier.clickable(onClick = onCancel)
+                    text = "${connection.host}:${connection.port}",
+                    style = TextStyle(
+                        fontSize = T.textSettingTitle,
+                        fontWeight = FontWeight.Medium,
+                        color = T.colorTextPrimary
                     )
-                }
+                )
+                Text(
+                    text = "vault ${connection.vaultId} \u2022 key ${maskKey(connection.passkey)}",
+                    style = TextStyle(fontSize = T.textResultMeta, color = T.colorTextSecondary)
+                )
             }
         }
-        progress?.let {
-            androidx.compose.material3.LinearProgressIndicator(
-                progress = { it },
-                modifier = Modifier.fillMaxWidth(),
-                color = MirageTokens.colorSelectedBgStrong,
-                trackColor = MirageTokens.colorKeyBg
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(T.spaceSm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = if (worker.connected) "Connected" else "Offline",
+                    style = TextStyle(
+                        fontSize = T.textResultMeta,
+                        fontWeight = FontWeight.Medium,
+                        color = if (worker.connected) T.colorTextPrimary else T.colorTextSecondary
+                    )
+                )
+                Text(
+                    text = worker.detailLine(),
+                    style = TextStyle(fontSize = T.textResultMeta, color = T.colorTextSecondary)
+                )
+            }
+            RowIconButton(
+                icon = Icons.Default.Delete,
+                description = "Remove worker",
+                onClick = onRemove
             )
         }
     }
 }
 
-@Composable
-private fun ServerRow(server: ServerConnection) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        Text(
-            text = "${if (server.isHttps) "https" else "http"}://${server.host}:${server.port}",
-            fontSize = MirageTokens.textSettingTitle,
-            fontWeight = FontWeight.Medium,
-            color = MirageTokens.colorTextPrimary
-        )
-        Text(
-            text = "Vault: ${server.vaultId}",
-            fontSize = MirageTokens.textSettingDesc,
-            color = MirageTokens.colorTextSecondary
-        )
-    }
+private fun WorkerUiState.detailLine(): String {
+    val parts = listOfNotNull(
+        lastSyncLabel?.let { "delta $it" },
+        vectorCount?.let { "${it.grouped()} vectors" }
+    )
+    return if (parts.isEmpty()) "not synced yet" else parts.joinToString(" \u2022 ")
 }
+
+/** Shortens a passkey to `sec_pk_9f8a\u20263d12` so it can be shown on screen. */
+/** `sec_pk_9f8a…3d12`: enough of both ends to tell two workers apart. */
+private fun maskKey(key: String): String {
+    if (key.length <= 12) return "\u2022".repeat(key.length)
+    return "${key.take(11)}\u2026${key.takeLast(4)}"
+}
+
+
+

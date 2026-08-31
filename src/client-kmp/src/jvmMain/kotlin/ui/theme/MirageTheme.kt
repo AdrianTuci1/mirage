@@ -2,61 +2,44 @@ package mirage.desktop.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.ui.graphics.Color
 
-val LocalMirageColors = compositionLocalOf { lightMirageColors() }
-
-private fun MirageColors.toMaterialColorScheme(dark: Boolean) = if (dark) darkColorScheme(
-    primary = Color(0xFFA78BFA),
-    onPrimary = Color.Black,
-    primaryContainer = colorSelectedBg,
-    onPrimaryContainer = colorTextPrimary,
-    secondaryContainer = colorKeyBg,
-    onSecondaryContainer = colorKeyText,
-    surface = colorBg,
-    onSurface = colorTextPrimary,
-    onSurfaceVariant = colorTextSecondary,
-    surfaceVariant = colorHoverBg,
-    outline = colorBorder,
-    outlineVariant = colorBorder,
-    background = colorBg,
-    onBackground = colorTextPrimary
-) else lightColorScheme(
-    primary = Color(0xFF7C3AED),
-    onPrimary = Color.White,
-    primaryContainer = colorSelectedBg,
-    onPrimaryContainer = colorTextPrimary,
-    secondaryContainer = colorKeyBg,
-    onSecondaryContainer = colorKeyText,
-    surface = colorBg,
-    onSurface = colorTextPrimary,
-    onSurfaceVariant = colorTextSecondary,
-    surfaceVariant = colorHoverBg,
-    outline = colorBorder,
-    outlineVariant = colorBorder,
-    background = colorBg,
-    onBackground = colorTextPrimary
+/**
+ * Material3 colour scheme derived from [MirageTokens].
+ *
+ * Mirage is dark-only, so there is deliberately no light variant and no
+ * system-theme switch: what the user sees is what the Penpot boards show.
+ * Only the components that cannot be drawn with [MirageTokens] directly (switch,
+ * text fields, menus) read from this scheme.
+ */
+private val MirageColorScheme = darkColorScheme(
+    primary = MirageTokens.colorSelectedBgStrong,
+    onPrimary = MirageTokens.colorBg,
+    primaryContainer = MirageTokens.colorSelectedBg,
+    onPrimaryContainer = MirageTokens.colorTextPrimary,
+    secondaryContainer = MirageTokens.colorKeyBg,
+    onSecondaryContainer = MirageTokens.colorKeyText,
+    surface = MirageTokens.colorBg,
+    onSurface = MirageTokens.colorTextPrimary,
+    onSurfaceVariant = MirageTokens.colorTextSecondary,
+    surfaceVariant = MirageTokens.colorHoverBg,
+    surfaceContainer = MirageTokens.colorKeyBg,
+    surfaceContainerHigh = MirageTokens.colorKeyBg,
+    surfaceContainerHighest = MirageTokens.colorKeyBg,
+    background = MirageTokens.colorBg,
+    onBackground = MirageTokens.colorTextPrimary,
+    outline = MirageTokens.colorInputBorder,
+    outlineVariant = MirageTokens.colorBorder,
+    error = MirageTokens.colorProgressActive
 )
 
 /**
- * Minimal theme wrapper for Mirage.
- *
- * Follows the system light/dark mode by default. Keeps a MaterialTheme underneath
- * for standard components (switch, button) but the custom search/settings UI
- * reads from [LocalMirageColors] / [MirageTokens].
+ * Theme wrapper for every Mirage window and dialog.
  */
 @Composable
 fun MirageTheme(content: @Composable () -> Unit) {
-    val colors = MirageTokens.colors
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-    CompositionLocalProvider(LocalMirageColors provides colors) {
-        MaterialTheme(
-            colorScheme = colors.toMaterialColorScheme(isDark),
-            content = content
-        )
-    }
+    MaterialTheme(
+        colorScheme = MirageColorScheme,
+        content = content
+    )
 }

@@ -22,7 +22,7 @@ sealed class ClipboardEntry(
         val bytes: ByteArray,
         val createdAt: Long = System.currentTimeMillis()
     ) : ClipboardEntry(bytes.contentHashCode().toString() + createdAt, createdAt) {
-        override fun previewLabel(): String = "Image (${formatSize(bytes.size)})"
+        override fun previewLabel(): String = "Image (${formatSize(bytes.size.toLong())})"
 
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
