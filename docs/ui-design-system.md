@@ -15,20 +15,30 @@ Principii:
 
 ### 2.1 Culori
 
+Rampa neutră implicită (dark), identică cu `MirageTokens` din client și cu tokenii
+`L.HEX.dark` din fișierul Penpot:
+
 | Token | Valoare | Utilizare |
 |-------|---------|-----------|
-| `--color-bg` | `#FFFFFF` | Fundal fereastră principală și settings |
-| `--color-text-primary` | `#000000` | Text principal, titluri, input |
-| `--color-text-secondary` | `#6B7280` | Descrieri, placeholder, metadata |
-| `--color-border` | `#E5E7EB` | Chenar exterior input, separator, `<tab>` box |
-| `--color-input-border` | `#000000` | Chenar interior input (negru, 1px) |
-| `--color-selected-bg` | `#EDE9FE` / `#DDD6FE` | Fundal element selectat (mov deschis / desaturat) |
-| `--color-selected-text` | `#000000` | Text pe element selectat |
-| `--color-key-bg` | `#F3F4F6` | Fundal pentru taste afișate (`<tab>`, `<x>`, `<option>`) |
-| `--color-key-text` | `#374151` | Text taste afișate |
-| `--color-hover-bg` | `#F9FAFB` | Hover subtil pe elemente neselectate |
+| `--color-bg` | `#18181A` | Fundal fereastră principală și settings |
+| `--color-text-primary` | `#FFFFFF` | Text principal, titluri, input |
+| `--color-text-secondary` | `#98989D` | Descrieri, placeholder, metadata |
+| `--color-border` | `#2E2E32` | Chenar exterior input, separator, `<tab>` box |
+| `--color-input-border` | `#48484D` | Chenar interior input (1px) |
+| `--color-selected-bg` | `#38383D` | Fundal element selectat (rând, tab, chip) |
+| `--color-selected-bg-strong` | `#4A4A50` | Variantă selectată mai tare (buton apăsatic) |
+| `--color-selected-text` | `#FFFFFF` | Text pe element selectat |
+| `--color-key-bg` | `#26262A` | Fundal pentru taste afișate (`<tab>`, `<x>`, `<option>`) |
+| `--color-key-text` | `#C8C8CD` | Text taste afișate |
+| `--color-hover-bg` | `#202024` | Hover subtil pe elemente neselectate |
+| `--color-progress-idle` | `#6E6E73` | Pista de progres / stare „în așteptare" |
+| `--color-progress-active` | `#EAB308` | Lucru în curs (indexare, descărcare modul) |
+| `--color-progress-done` | `#22C55E` | Terminat / gata |
 
-> Notă: toate culorile sunt valori orientative pentru light mode. Dark mode va fi definit ulterior prin înversarea luminii păstrând accentul mov.
+> Notă: accentul mov din versiunile timpurii a fost scos în review-ul din 2026-08 — nu mai
+> există culoare cromatică de brand, iar starea se exprimă prin rampă neutrilă + culori de
+> semantică a progresului. Light mode inversează doar luminozitatea rămpii, păstrând
+> aceleași roluri de token.
 
 ### 2.2 Spațiere
 
@@ -160,28 +170,35 @@ Rezultatele apar **doar când utilizatorul a scris cel puțin un caracter**.
 
 ### 4.1 Structură
 
+Fereastra de Settings are 960×720, cu un title bar macOS desenat (traffic lights) și stripul
+de tab-uri centrat dedesubt:
+
 ```
-┌────────────────────────────────────────────┐
-│  [icon] General  │  [icon] Modules  │ ...   │  ← Tab-uri categorii
-│  ─────────────────────────────────────────  │
-│                                              │
-│  Titlu opțiune                             [●] │  ← Rând switch
-│  Descriere scurtă                            │
-│  ─────────────────────────────────────────  │
-│  Titlu opțiune                               │
-│  Descriere mai lungă care justifică         │
-│  [Select / dropdown]                         │  ← Rând select sub text
-│                                              │
-└────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ ● ● ●                                          Settings      │  ← title bar desenat
+│                                                              │
+│        ( ⚙ )   ( ▼ )   ( ⇄ )   ( ☁ )                        │  ← tab-uri, icon + label
+│       General Modules Connectors Servers                     │
+│  ─────────────────────────────────────────────────────────── │
+│                                                              │
+│  Indexing                                                    │
+│  ▓▓▓▓▓▓▓░░░░░░░░  62%                                     │  ← bară 4dp + count
+│  ─────────────────────────────────────────────────────────── │
+│  Titlu opțiune                                      [switch] │
+│  Descriere scurtă                                            │
+│                                                              │
+│  Quit Mirage                                                 │  ← acțiune de jos
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### 4.2 Tab-uri de categorii
 
-- Rand orizontal în partea de sus.
-- Fiecare tab: `icon + descriere`, separate prin `|` sau spațiu.
-- Tab activ: text negru + linie subțire mov dedesubt.
-- Tab inactiv: text `--color-text-secondary`.
-- Fără carduri sau fundal pentru tab-uri.
+- Rand orizontal centrat, imediat sub title bar; fiecare tab este `icon` deasupra `label`.
+- Tab activ: fundal `--color-selected-bg` pe icon, text `--color-text-primary`.
+- Tab inactiv: text `--color-text-secondary`, fără fundal.
+- Separator `MirageDivider()` sub strip, apoi conținutul tab-ului cu padding `spaceLg` pe
+  orizontală și `spaceMd` pe verticală.
+- Fără linie mov sub tab și fără carduri în jurul tab-urilor.
 
 ### 4.3 Rând standard pentru switch
 

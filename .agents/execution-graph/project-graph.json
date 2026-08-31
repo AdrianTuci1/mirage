@@ -1,7 +1,7 @@
 {
   "project": "mirage",
   "version": "1.0.0",
-  "last_updated": "2026-08-27",
+  "last_updated": "2026-08-31",
   "description": "Graf de execuție pentru implementarea Mirage. Nodurile sunt task-uri sau livrabile; muchiile sunt dependențe.",
   "milestones": [
     "M0: Setup repo & tooling",
@@ -28,7 +28,11 @@
       "assignee": "agent",
       "milestone": "M0",
       "depends_on": [],
-      "outputs": [".agents/", "README.md", ".gitignore"],
+      "outputs": [
+        ".agents/",
+        "README.md",
+        ".gitignore"
+      ],
       "notes": "Done at project creation."
     },
     {
@@ -38,8 +42,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M0",
-      "depends_on": ["T0.1"],
-      "outputs": [".agents/decisions/adr/001-remote-indexer-stack.md"],
+      "depends_on": [
+        "T0.1"
+      ],
+      "outputs": [
+        ".agents/decisions/adr/001-remote-indexer-stack.md"
+      ],
       "notes": "Decision needed before implementation."
     },
     {
@@ -49,8 +57,13 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M1",
-      "depends_on": ["T1.1"],
-      "outputs": ["src/remote-indexer/Dockerfile", "src/remote-indexer/docker-compose.yml"],
+      "depends_on": [
+        "T1.1"
+      ],
+      "outputs": [
+        "src/remote-indexer/Dockerfile",
+        "src/remote-indexer/docker-compose.yml"
+      ],
       "notes": "Include read-only volume mapping and env config."
     },
     {
@@ -60,8 +73,13 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M1",
-      "depends_on": ["T1.2"],
-      "outputs": ["src/remote-indexer/db/", "src/remote-indexer/models/"],
+      "depends_on": [
+        "T1.2"
+      ],
+      "outputs": [
+        "src/remote-indexer/db/",
+        "src/remote-indexer/models/"
+      ],
       "notes": "Define schema and delta generation logic."
     },
     {
@@ -71,8 +89,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M1",
-      "depends_on": ["T1.2"],
-      "outputs": ["src/remote-indexer/inference/"],
+      "depends_on": [
+        "T1.2"
+      ],
+      "outputs": [
+        "src/remote-indexer/inference/"
+      ],
       "notes": "Support int8, AVX2/NEON, optional CUDA."
     },
     {
@@ -82,8 +104,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M1",
-      "depends_on": ["T1.3"],
-      "outputs": ["src/remote-indexer/connectors/"],
+      "depends_on": [
+        "T1.3"
+      ],
+      "outputs": [
+        "src/remote-indexer/connectors/"
+      ],
       "notes": "Read-only access only."
     },
     {
@@ -93,8 +119,13 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M1",
-      "depends_on": ["T1.4", "T1.5"],
-      "outputs": ["src/remote-indexer/pipeline.py|rs"],
+      "depends_on": [
+        "T1.4",
+        "T1.5"
+      ],
+      "outputs": [
+        "src/remote-indexer/pipeline.py|rs"
+      ],
       "notes": "Use diff scanning and incremental updates."
     },
     {
@@ -104,8 +135,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M2",
-      "depends_on": ["T1.3"],
-      "outputs": [".agents/decisions/adr/003-delta-sync-protocol.md"],
+      "depends_on": [
+        "T1.3"
+      ],
+      "outputs": [
+        ".agents/decisions/adr/003-delta-sync-protocol.md"
+      ],
       "notes": "Decision updated in ADR 003: MVP uses NDJSON record streaming over HTTP instead of raw .lance files. gRPC/HTTP2 can be added later."
     },
     {
@@ -115,7 +150,10 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M2",
-      "depends_on": ["T2.1", "T1.6"],
+      "depends_on": [
+        "T2.1",
+        "T1.6"
+      ],
       "outputs": [
         "src/remote-indexer/app/api/sync.py",
         "src/remote-indexer/app/db.py",
@@ -131,8 +169,15 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M0",
-      "depends_on": ["T0.1"],
-      "outputs": ["src/client-kmp/build.gradle.kts", "src/client-kmp/gradle.properties", "src/client-kmp/settings.gradle.kts", "src/client-kmp/src/jvmMain/kotlin/Main.kt"],
+      "depends_on": [
+        "T0.1"
+      ],
+      "outputs": [
+        "src/client-kmp/build.gradle.kts",
+        "src/client-kmp/gradle.properties",
+        "src/client-kmp/settings.gradle.kts",
+        "src/client-kmp/src/jvmMain/kotlin/Main.kt"
+      ],
       "notes": "Target JVM desktop first. Gradle wrapper generated; build passes with JDK 21."
     },
     {
@@ -142,8 +187,13 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M3",
-      "depends_on": ["T3.1"],
-      "outputs": ["src/client-kmp/src/commonMain/kotlin/VaultUriParser.kt", "src/client-kmp/src/commonMain/kotlin/RemoteVaultConfig.kt"],
+      "depends_on": [
+        "T3.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/commonMain/kotlin/VaultUriParser.kt",
+        "src/client-kmp/src/commonMain/kotlin/RemoteVaultConfig.kt"
+      ],
       "notes": "Parse vault://host:port#vault_id=...&key=..."
     },
     {
@@ -153,8 +203,13 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M3",
-      "depends_on": ["T3.2", "T2.2"],
-      "outputs": ["src/client-kmp/src/commonMain/kotlin/RemoteVaultManager.kt"],
+      "depends_on": [
+        "T3.2",
+        "T2.2"
+      ],
+      "outputs": [
+        "src/client-kmp/src/commonMain/kotlin/RemoteVaultManager.kt"
+      ],
       "notes": "NDJSON delta parsing with Ktor; records upserted into LocalVectorStore via SearchEngine."
     },
     {
@@ -164,7 +219,9 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M3",
-      "depends_on": ["T3.1"],
+      "depends_on": [
+        "T3.1"
+      ],
       "outputs": [
         "src/client-kmp/src/commonMain/kotlin/search/VectorRecord.kt",
         "src/client-kmp/src/commonMain/kotlin/search/SearchResult.kt",
@@ -182,8 +239,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M4",
-      "depends_on": ["T3.1"],
-      "outputs": ["src/client-kmp/src/commonMain/kotlin/VfsAdapter.kt"],
+      "depends_on": [
+        "T3.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/commonMain/kotlin/VfsAdapter.kt"
+      ],
       "notes": "Methods: fetchThumbnail, openFile."
     },
     {
@@ -193,8 +254,13 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M4",
-      "depends_on": ["T4.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/adapters/LocalVfsAdapter.kt", "src/client-kmp/src/jvmMain/kotlin/adapters/ThumbnailGenerator.kt"],
+      "depends_on": [
+        "T4.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/adapters/LocalVfsAdapter.kt",
+        "src/client-kmp/src/jvmMain/kotlin/adapters/ThumbnailGenerator.kt"
+      ],
       "notes": "Uses java.nio, Desktop API and AWT ImageIO for 64x64 PNG thumbnails."
     },
     {
@@ -204,8 +270,12 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M4",
-      "depends_on": ["T4.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/adapters/DropboxVfsAdapter.kt"],
+      "depends_on": [
+        "T4.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/adapters/DropboxVfsAdapter.kt"
+      ],
       "notes": "Direct Dropbox API calls with OAuth token."
     },
     {
@@ -215,8 +285,12 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M4",
-      "depends_on": ["T4.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/adapters/GoogleDriveVfsAdapter.kt"],
+      "depends_on": [
+        "T4.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/adapters/GoogleDriveVfsAdapter.kt"
+      ],
       "notes": "Drive REST API v3 with OAuth token."
     },
     {
@@ -226,8 +300,12 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M4",
-      "depends_on": ["T4.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/adapters/NasSmbVfsAdapter.kt"],
+      "depends_on": [
+        "T4.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/adapters/NasSmbVfsAdapter.kt"
+      ],
       "notes": "JCIFS or smbj for SMB; also support direct network path."
     },
     {
@@ -237,8 +315,14 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M5",
-      "depends_on": ["T3.4", "T4.1"],
-      "outputs": ["src/client-kmp/src/commonMain/kotlin/ui/SearchScreen.kt", "src/client-kmp/src/jvmMain/kotlin/Main.kt"],
+      "depends_on": [
+        "T3.4",
+        "T4.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/commonMain/kotlin/ui/SearchScreen.kt",
+        "src/client-kmp/src/jvmMain/kotlin/Main.kt"
+      ],
       "notes": "Spotlight/Raycast-style floating window: search input, status bar with Start indexing / Add vault buttons, Esc to hide, multi-monitor centering."
     },
     {
@@ -248,8 +332,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M5",
-      "depends_on": ["T3.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/platform/GlobalShortcutManager.kt"],
+      "depends_on": [
+        "T3.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/platform/GlobalShortcutManager.kt"
+      ],
       "notes": "Cmd/Ctrl + Shift + Space toggles the floating search window."
     },
     {
@@ -259,8 +347,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M5",
-      "depends_on": ["T3.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/platform/SystemTrayManager.kt"],
+      "depends_on": [
+        "T3.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/platform/SystemTrayManager.kt"
+      ],
       "notes": "AWT SystemTray with Show/Settings/Quit menu."
     },
     {
@@ -270,8 +362,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M5",
-      "depends_on": ["T3.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/platform/ClipboardManager.kt"],
+      "depends_on": [
+        "T3.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/platform/ClipboardManager.kt"
+      ],
       "notes": "Polls system clipboard and keeps a searchable in-memory history."
     },
     {
@@ -281,7 +377,10 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M5",
-      "depends_on": ["T5.1", "T3.3"],
+      "depends_on": [
+        "T5.1",
+        "T3.3"
+      ],
       "outputs": [
         "src/client-kmp/src/commonMain/kotlin/vault/ServerConnection.kt",
         "src/client-kmp/src/jvmMain/kotlin/ui/AddServerScreen.kt"
@@ -295,8 +394,12 @@
       "status": "cancelled",
       "assignee": "agent",
       "milestone": "M6",
-      "depends_on": ["T0.1"],
-      "outputs": [".agents/decisions/adr/002-licensing-offline.md"],
+      "depends_on": [
+        "T0.1"
+      ],
+      "outputs": [
+        ".agents/decisions/adr/002-licensing-offline.md"
+      ],
       "notes": "Cancelled per ADR 007. Replaced by managed/self-hosted server code model."
     },
     {
@@ -306,8 +409,13 @@
       "status": "cancelled",
       "assignee": "agent",
       "milestone": "M6",
-      "depends_on": ["T6.1"],
-      "outputs": ["scripts/generate-license.py", "src/shared/license/"],
+      "depends_on": [
+        "T6.1"
+      ],
+      "outputs": [
+        "scripts/generate-license.py",
+        "src/shared/license/"
+      ],
       "notes": "Cancelled per ADR 007."
     },
     {
@@ -317,8 +425,13 @@
       "status": "cancelled",
       "assignee": "agent",
       "milestone": "M6",
-      "depends_on": ["T6.2", "T3.1"],
-      "outputs": ["src/client-kmp/src/commonMain/kotlin/license/LicenseValidator.kt"],
+      "depends_on": [
+        "T6.2",
+        "T3.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/commonMain/kotlin/license/LicenseValidator.kt"
+      ],
       "notes": "Cancelled per ADR 007."
     },
     {
@@ -328,8 +441,12 @@
       "status": "cancelled",
       "assignee": "agent",
       "milestone": "M6",
-      "depends_on": ["T6.3"],
-      "outputs": ["src/client-kmp/src/commonMain/kotlin/license/TrialManager.kt"],
+      "depends_on": [
+        "T6.3"
+      ],
+      "outputs": [
+        "src/client-kmp/src/commonMain/kotlin/license/TrialManager.kt"
+      ],
       "notes": "Cancelled per ADR 007."
     },
     {
@@ -339,8 +456,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M8",
-      "depends_on": ["T3.1"],
-      "outputs": ["src/client-kmp/build.gradle.kts"],
+      "depends_on": [
+        "T3.1"
+      ],
+      "outputs": [
+        "src/client-kmp/build.gradle.kts"
+      ],
       "notes": "ONNX Runtime Java for local embeddings/vision/translator."
     },
     {
@@ -350,8 +471,13 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M8",
-      "depends_on": ["T8.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/ai/LocalEmbedder.kt", "src/client-kmp/src/jvmMain/kotlin/ai/OnnxRuntimeEmbedder.kt"],
+      "depends_on": [
+        "T8.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/ai/LocalEmbedder.kt",
+        "src/client-kmp/src/jvmMain/kotlin/ai/OnnxRuntimeEmbedder.kt"
+      ],
       "notes": "MVP: text embeddings. Vision and translator as stubs."
     },
     {
@@ -361,8 +487,13 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M8",
-      "depends_on": ["T8.2", "T3.4"],
-      "outputs": ["src/client-kmp/src/commonMain/kotlin/search/SearchEngine.kt"],
+      "depends_on": [
+        "T8.2",
+        "T3.4"
+      ],
+      "outputs": [
+        "src/client-kmp/src/commonMain/kotlin/search/SearchEngine.kt"
+      ],
       "notes": "Use cosine similarity on real embeddings instead of heuristic text scoring."
     },
     {
@@ -372,8 +503,13 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M8",
-      "depends_on": ["T8.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/ai/LocalVision.kt", "src/client-kmp/src/jvmMain/kotlin/ai/LocalTranslator.kt"],
+      "depends_on": [
+        "T8.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/ai/LocalVision.kt",
+        "src/client-kmp/src/jvmMain/kotlin/ai/LocalTranslator.kt"
+      ],
       "notes": "Stubs for future ONNX vision/translator models."
     },
     {
@@ -383,8 +519,16 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M9",
-      "depends_on": ["T0.1"],
-      "outputs": ["src/daemon/Cargo.toml", "src/daemon/src/main.rs", "src/daemon/src/config.rs", "src/daemon/src/logging.rs", "src/daemon/src/models/mod.rs"],
+      "depends_on": [
+        "T0.1"
+      ],
+      "outputs": [
+        "src/daemon/Cargo.toml",
+        "src/daemon/src/main.rs",
+        "src/daemon/src/config.rs",
+        "src/daemon/src/logging.rs",
+        "src/daemon/src/models/mod.rs"
+      ],
       "notes": "Cargo project, logging, config loading, CLI args, shared models."
     },
     {
@@ -394,8 +538,16 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M9",
-      "depends_on": ["T9.1"],
-      "outputs": ["src/daemon/src/ipc/server.rs", "src/daemon/src/ipc/protocol.rs", "src/daemon/src/ipc/client.rs", "src/daemon/src/ipc/mod.rs", "src/daemon/tests/ipc_ping.rs"],
+      "depends_on": [
+        "T9.1"
+      ],
+      "outputs": [
+        "src/daemon/src/ipc/server.rs",
+        "src/daemon/src/ipc/protocol.rs",
+        "src/daemon/src/ipc/client.rs",
+        "src/daemon/src/ipc/mod.rs",
+        "src/daemon/tests/ipc_ping.rs"
+      ],
       "notes": "JSON-RPC framing over Unix Domain Socket / Named Pipe; ping/status handlers; integration test passes on macOS."
     },
     {
@@ -405,8 +557,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M9",
-      "depends_on": ["T9.1"],
-      "outputs": ["src/daemon/src/db.rs"],
+      "depends_on": [
+        "T9.1"
+      ],
+      "outputs": [
+        "src/daemon/src/db.rs"
+      ],
       "notes": "Replace Python LanceDB with Rust LanceDB native."
     },
     {
@@ -416,8 +572,13 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M9",
-      "depends_on": ["T9.2", "T9.3"],
-      "outputs": ["src/daemon/src/rpc/search.rs"],
+      "depends_on": [
+        "T9.2",
+        "T9.3"
+      ],
+      "outputs": [
+        "src/daemon/src/rpc/search.rs"
+      ],
       "notes": "Hybrid vector + BM25 search."
     },
     {
@@ -427,8 +588,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M9",
-      "depends_on": ["T9.3"],
-      "outputs": ["src/daemon/src/embeddings.rs"],
+      "depends_on": [
+        "T9.3"
+      ],
+      "outputs": [
+        "src/daemon/src/embeddings.rs"
+      ],
       "notes": "Core embedder implemented in daemon_next. Needs refactor for modular/on-demand download per ADR 012."
     },
     {
@@ -438,8 +603,12 @@
       "status": "completed",
       "assignee": "agent",
       "milestone": "M9",
-      "depends_on": ["T9.1"],
-      "outputs": ["src/daemon/src/analytics.rs"],
+      "depends_on": [
+        "T9.1"
+      ],
+      "outputs": [
+        "src/daemon/src/analytics.rs"
+      ],
       "notes": "Core analytics engine implemented in daemon_next. Needs refactor for modular/on-demand download per ADR 012."
     },
     {
@@ -449,8 +618,13 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M10",
-      "depends_on": ["T0.1"],
-      "outputs": ["src/cli/Cargo.toml", "src/cli/src/main.rs"],
+      "depends_on": [
+        "T0.1"
+      ],
+      "outputs": [
+        "src/cli/Cargo.toml",
+        "src/cli/src/main.rs"
+      ],
       "notes": "Lightweight CLI in Rust. Design: .agents/specs/cli-mcp-design.md §1-§3."
     },
     {
@@ -460,8 +634,13 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M10",
-      "depends_on": ["T10.1", "T9.2"],
-      "outputs": ["src/cli/src/commands.rs"],
+      "depends_on": [
+        "T10.1",
+        "T9.2"
+      ],
+      "outputs": [
+        "src/cli/src/commands.rs"
+      ],
       "notes": "Connects to daemon IPC. Design: .agents/specs/cli-mcp-design.md §2, §4, §5."
     },
     {
@@ -471,8 +650,12 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M10",
-      "depends_on": ["T10.2"],
-      "outputs": ["src/cli/src/mcp.rs"],
+      "depends_on": [
+        "T10.2"
+      ],
+      "outputs": [
+        "src/cli/src/mcp.rs"
+      ],
       "notes": "MCP server over stdio. Design: .agents/specs/cli-mcp-design.md §6, §7."
     },
     {
@@ -482,8 +665,12 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M11",
-      "depends_on": ["T2.2"],
-      "outputs": ["src/remote-indexer/admin/index.html"],
+      "depends_on": [
+        "T2.2"
+      ],
+      "outputs": [
+        "src/remote-indexer/admin/index.html"
+      ],
       "notes": "Static admin UI bundled in Docker image."
     },
     {
@@ -493,8 +680,12 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M11",
-      "depends_on": ["T11.1"],
-      "outputs": ["src/remote-indexer/app/api/admin.py"],
+      "depends_on": [
+        "T11.1"
+      ],
+      "outputs": [
+        "src/remote-indexer/app/api/admin.py"
+      ],
       "notes": "Generate, rotate, revoke keys."
     },
     {
@@ -504,8 +695,12 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M12",
-      "depends_on": ["T5.1"],
-      "outputs": [".agents/decisions/adr/011-modular-setup-wizard.md"],
+      "depends_on": [
+        "T5.1"
+      ],
+      "outputs": [
+        ".agents/decisions/adr/011-modular-setup-wizard.md"
+      ],
       "notes": "Wizard screens for module selection."
     },
     {
@@ -515,52 +710,75 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M12",
-      "depends_on": ["T12.1"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/ui/SetupWizard.kt"],
+      "depends_on": [
+        "T12.1"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/ui/SetupWizard.kt"
+      ],
       "notes": "User selects modules and approves model downloads."
     },
     {
       "id": "T13.1",
       "title": "Design module manifest format and catalog",
       "module": "daemon",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M13",
-      "depends_on": ["T9.1"],
-      "outputs": ["src/daemon/src/modules/manifest.rs", "assets/modules/catalog.json"],
+      "depends_on": [
+        "T9.1"
+      ],
+      "outputs": [
+        "src/daemon/src/modules/manifest.rs",
+        "assets/modules/catalog.json"
+      ],
       "notes": "JSON schema: id, name, version, urls per platform, checksums, dependencies, size. Design doc: .agents/specs/modular-download-manager.md; schema: .agents/specs/module-manifest-schema.json."
     },
     {
       "id": "T13.2",
       "title": "Implement Modular Download Manager in daemon",
       "module": "daemon",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M13",
-      "depends_on": ["T13.1"],
-      "outputs": ["src/daemon/src/modules/download_manager.rs"],
+      "depends_on": [
+        "T13.1"
+      ],
+      "outputs": [
+        "src/daemon/src/modules/download_manager.rs"
+      ],
       "notes": "HTTPS download with resume, checksum verification, dependency resolution, progress events. Design doc: .agents/specs/modular-download-manager.md."
     },
     {
       "id": "T13.3",
       "title": "Refactor DuckDB analytics as downloadable module",
       "module": "daemon",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M13",
-      "depends_on": ["T9.6", "T13.2"],
-      "outputs": ["src/daemon/src/modules/duckdb_engine.rs"],
+      "depends_on": [
+        "T9.6",
+        "T13.2"
+      ],
+      "outputs": [
+        "src/daemon/src/modules/duckdb_engine.rs"
+      ],
       "notes": "DuckDB native library loaded dynamically from downloads dir; query() returns missing-module error when absent. Design: .agents/specs/optional-engine-refactor.md §9."
     },
     {
       "id": "T13.4",
       "title": "Refactor ONNX Runtime embedder as downloadable module",
       "module": "daemon",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M13",
-      "depends_on": ["T9.5", "T13.2"],
-      "outputs": ["src/daemon/src/modules/onnx_engine.rs"],
+      "depends_on": [
+        "T9.5",
+        "T13.2"
+      ],
+      "outputs": [
+        "src/daemon/src/modules/onnx_engine.rs"
+      ],
       "notes": "ONNX Runtime loaded from downloads dir; embed/search uses fallback if missing or prompts download. Design: .agents/specs/optional-engine-refactor.md §10."
     },
     {
@@ -570,19 +788,29 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M13",
-      "depends_on": ["T13.4"],
-      "outputs": ["src/daemon/src/modules/sql_generator.rs"],
+      "depends_on": [
+        "T13.4"
+      ],
+      "outputs": [
+        "src/daemon/src/modules/sql_generator.rs"
+      ],
       "notes": "Multilingual ONNX model routes NL to semantic_search or sql_query, generates DuckDB SQL, and summarizes results in NL. No llama.cpp dependency. Design: .agents/specs/slm-sql-generator.md."
     },
     {
       "id": "T13.6",
       "title": "Add IPC methods for module management and SQL generation",
       "module": "daemon",
-      "status": "pending",
+      "status": "completed",
       "assignee": "agent",
       "milestone": "M13",
-      "depends_on": ["T13.3", "T13.4", "T13.5"],
-      "outputs": ["src/daemon/src/ipc/server.rs"],
+      "depends_on": [
+        "T13.3",
+        "T13.4",
+        "T13.5"
+      ],
+      "outputs": [
+        "src/daemon/src/ipc/server.rs"
+      ],
       "notes": "Adds IPC method ask(question) which routes to semantic_search or sql_query, generates DuckDB SQL, and summarizes results in natural language. Also methods download_module, module_status; query() detects missing DuckDB and returns structured error. Design: .agents/specs/slm-sql-generator.md §6. Optional-engine refactor design: .agents/specs/optional-engine-refactor.md §5, §6, §7."
     },
     {
@@ -592,8 +820,13 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M13",
-      "depends_on": ["T12.2", "T13.6"],
-      "outputs": ["src/client-kmp/src/jvmMain/kotlin/ui/DownloadProgressScreen.kt"],
+      "depends_on": [
+        "T12.2",
+        "T13.6"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/ui/DownloadProgressScreen.kt"
+      ],
       "notes": "Dialogs for missing modules; progress UI; settings page to add/remove modules."
     },
     {
@@ -603,8 +836,13 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M13",
-      "depends_on": ["T10.2", "T13.6"],
-      "outputs": ["src/cli/src/commands.rs"],
+      "depends_on": [
+        "T10.2",
+        "T13.6"
+      ],
+      "outputs": [
+        "src/cli/src/commands.rs"
+      ],
       "notes": "Commands: mirage modules, mirage download <module>, mirage ask <question>. Natural language questions are answered, not raw SQL. Design: .agents/specs/cli-mcp-design.md §2.6-§2.8, §8."
     },
     {
@@ -614,8 +852,13 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M7",
-      "depends_on": ["T2.2"],
-      "outputs": ["src/remote-indexer/.dockerignore", "scripts/build-image.sh"],
+      "depends_on": [
+        "T2.2"
+      ],
+      "outputs": [
+        "src/remote-indexer/.dockerignore",
+        "scripts/build-image.sh"
+      ],
       "notes": "Multi-arch image for amd64/arm64."
     },
     {
@@ -625,8 +868,17 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M7",
-      "depends_on": ["T5.2", "T8.3", "T9.2", "T12.2", "T13.7"],
-      "outputs": ["src/client-kmp/package/", "scripts/package-desktop.sh"],
+      "depends_on": [
+        "T5.2",
+        "T8.3",
+        "T9.2",
+        "T12.2",
+        "T13.7"
+      ],
+      "outputs": [
+        "src/client-kmp/package/",
+        "scripts/package-desktop.sh"
+      ],
       "notes": "MSI, DMG, DEB targets. Installer bundles only core daemon + KMP GUI; optional modules downloaded at runtime."
     },
     {
@@ -636,79 +888,387 @@
       "status": "pending",
       "assignee": "agent",
       "milestone": "M7",
-      "depends_on": ["T7.1", "T7.2"],
-      "outputs": ["tests/e2e/"],
+      "depends_on": [
+        "T7.1",
+        "T7.2"
+      ],
+      "outputs": [
+        "tests/e2e/"
+      ],
       "notes": "Spin up indexer, sync client, search and open file."
+    },
+    {
+      "id": "T9.7",
+      "title": "Real CLIP text+vision embedder in one 512-d space",
+      "module": "daemon",
+      "status": "completed",
+      "assignee": "agent",
+      "milestone": "M9",
+      "depends_on": [
+        "T9.5",
+        "T13.2"
+      ],
+      "outputs": [
+        "src/daemon_next/src/embeddings.rs",
+        "src/daemon_next/tests/clip_space.rs",
+        "scripts/fetch-clip-models.sh"
+      ],
+      "notes": "ViT-B/32 int8, canonical preprocessing, real BPE tokenizer; retrieval proven on six labelled photographs."
+    },
+    {
+      "id": "T9.8",
+      "title": "User-initiated indexing pass with progress reporting",
+      "module": "daemon",
+      "status": "completed",
+      "assignee": "agent",
+      "milestone": "M9",
+      "depends_on": [
+        "T9.6"
+      ],
+      "outputs": [
+        "src/daemon_next/src/index_state.rs",
+        "src/daemon_next/src/local_index.rs",
+        "src/daemon_next/src/content.rs"
+      ],
+      "notes": "Watcher and settings changes only mark the index stale; index_files is the only trigger, index_status reports phase/count/percent."
+    },
+    {
+      "id": "T9.9",
+      "title": "LanceDB modality and caption columns, dimension from the embedder",
+      "module": "daemon",
+      "status": "completed",
+      "assignee": "agent",
+      "milestone": "M9",
+      "depends_on": [
+        "T9.3"
+      ],
+      "outputs": [
+        "src/daemon_next/src/db.rs",
+        "src/daemon_next/src/models/mod.rs"
+      ],
+      "notes": "Table is rebuilt when the stored dimension no longer matches the loaded embedder (384 -> 512)."
+    },
+    {
+      "id": "T9.10",
+      "title": "Module catalog with verified CLIP URLs, sizes and sha256",
+      "module": "daemon",
+      "status": "completed",
+      "assignee": "agent",
+      "milestone": "M13",
+      "depends_on": [
+        "T13.1"
+      ],
+      "outputs": [
+        "src/daemon_next/src/modules/catalog.rs",
+        "src/daemon_next/src/modules/manager.rs"
+      ],
+      "notes": "Placeholder example.com entries removed; a test rejects catalog rows without a real checksum."
+    },
+    {
+      "id": "T9.11",
+      "title": "Spread the semantic result window across modalities",
+      "module": "daemon",
+      "status": "completed",
+      "assignee": "agent",
+      "milestone": "M9",
+      "depends_on": [
+        "T9.4",
+        "T9.7"
+      ],
+      "outputs": [
+        "src/daemon_next/src/search.rs"
+      ],
+      "notes": "Text scores 0.72-0.86 and images 0.22-0.29 in CLIP space; without the spread no photograph reached the visible window."
+    },
+    {
+      "id": "T5.6",
+      "title": "Settings indexing controls and module status wired to the daemon",
+      "module": "client-kmp",
+      "status": "completed",
+      "assignee": "agent",
+      "milestone": "M5",
+      "depends_on": [
+        "T9.8"
+      ],
+      "outputs": [
+        "src/client-kmp/src/jvmMain/kotlin/ui/SettingsWindow.kt",
+        "src/client-kmp/src/jvmMain/kotlin/Main.kt"
+      ],
+      "notes": "Start indexing / Re-index chip, 4dp progress bar, excluded dirs pushed back debounced, vision/semantic flags from status.modules."
     }
   ],
   "edges": [
-    ["T0.1", "T1.1"],
-    ["T1.1", "T1.2"],
-    ["T1.2", "T1.3"],
-    ["T1.2", "T1.4"],
-    ["T1.3", "T1.5"],
-    ["T1.4", "T1.6"],
-    ["T1.5", "T1.6"],
-    ["T1.3", "T2.1"],
-    ["T2.1", "T2.2"],
-    ["T1.6", "T2.2"],
-    ["T0.1", "T3.1"],
-    ["T3.1", "T3.2"],
-    ["T3.2", "T3.3"],
-    ["T2.2", "T3.3"],
-    ["T3.1", "T3.4"],
-    ["T3.1", "T4.1"],
-    ["T4.1", "T4.2"],
-    ["T4.1", "T4.3"],
-    ["T4.1", "T4.4"],
-    ["T4.1", "T4.5"],
-    ["T3.4", "T5.1"],
-    ["T4.1", "T5.1"],
-    ["T3.1", "T5.3"],
-    ["T3.1", "T5.4"],
-    ["T3.1", "T5.5"],
-    ["T5.1", "T5.2"],
-    ["T6.1", "T5.2"],
-    ["T0.1", "T6.1"],
-    ["T5.1", "T5.2"],
-    ["T3.3", "T5.2"],
-    ["T2.2", "T7.1"],
-    ["T5.2", "T7.2"],
-    ["T7.1", "T7.3"],
-    ["T7.2", "T7.3"],
-    ["T3.1", "T8.1"],
-    ["T8.1", "T8.2"],
-    ["T8.2", "T8.3"],
-    ["T8.1", "T8.4"],
-    ["T8.3", "T5.1"],
-    ["T3.4", "T8.3"],
-    ["T0.1", "T9.1"],
-    ["T9.1", "T9.2"],
-    ["T9.1", "T9.3"],
-    ["T9.2", "T9.4"],
-    ["T9.3", "T9.4"],
-    ["T9.3", "T9.5"],
-    ["T9.1", "T9.6"],
-    ["T0.1", "T10.1"],
-    ["T10.1", "T10.2"],
-    ["T10.2", "T10.3"],
-    ["T2.2", "T11.1"],
-    ["T11.1", "T11.2"],
-    ["T5.1", "T12.1"],
-    ["T12.1", "T12.2"],
-    ["T9.4", "T7.3"],
-    ["T10.3", "T7.3"],
-    ["T12.2", "T7.2"],
-    ["T12.2", "T13.7"],
-    ["T13.1", "T13.2"],
-    ["T13.2", "T13.3"],
-    ["T13.2", "T13.4"],
-    ["T13.4", "T13.5"],
-    ["T13.3", "T13.6"],
-    ["T13.4", "T13.6"],
-    ["T13.5", "T13.6"],
-    ["T13.6", "T13.7"],
-    ["T13.6", "T13.8"],
-    ["T13.7", "T7.2"]
+    [
+      "T0.1",
+      "T1.1"
+    ],
+    [
+      "T1.1",
+      "T1.2"
+    ],
+    [
+      "T1.2",
+      "T1.3"
+    ],
+    [
+      "T1.2",
+      "T1.4"
+    ],
+    [
+      "T1.3",
+      "T1.5"
+    ],
+    [
+      "T1.4",
+      "T1.6"
+    ],
+    [
+      "T1.5",
+      "T1.6"
+    ],
+    [
+      "T1.3",
+      "T2.1"
+    ],
+    [
+      "T2.1",
+      "T2.2"
+    ],
+    [
+      "T1.6",
+      "T2.2"
+    ],
+    [
+      "T0.1",
+      "T3.1"
+    ],
+    [
+      "T3.1",
+      "T3.2"
+    ],
+    [
+      "T3.2",
+      "T3.3"
+    ],
+    [
+      "T2.2",
+      "T3.3"
+    ],
+    [
+      "T3.1",
+      "T3.4"
+    ],
+    [
+      "T3.1",
+      "T4.1"
+    ],
+    [
+      "T4.1",
+      "T4.2"
+    ],
+    [
+      "T4.1",
+      "T4.3"
+    ],
+    [
+      "T4.1",
+      "T4.4"
+    ],
+    [
+      "T4.1",
+      "T4.5"
+    ],
+    [
+      "T3.4",
+      "T5.1"
+    ],
+    [
+      "T4.1",
+      "T5.1"
+    ],
+    [
+      "T3.1",
+      "T5.3"
+    ],
+    [
+      "T3.1",
+      "T5.4"
+    ],
+    [
+      "T3.1",
+      "T5.5"
+    ],
+    [
+      "T5.1",
+      "T5.2"
+    ],
+    [
+      "T6.1",
+      "T5.2"
+    ],
+    [
+      "T0.1",
+      "T6.1"
+    ],
+    [
+      "T5.1",
+      "T5.2"
+    ],
+    [
+      "T3.3",
+      "T5.2"
+    ],
+    [
+      "T2.2",
+      "T7.1"
+    ],
+    [
+      "T5.2",
+      "T7.2"
+    ],
+    [
+      "T7.1",
+      "T7.3"
+    ],
+    [
+      "T7.2",
+      "T7.3"
+    ],
+    [
+      "T3.1",
+      "T8.1"
+    ],
+    [
+      "T8.1",
+      "T8.2"
+    ],
+    [
+      "T8.2",
+      "T8.3"
+    ],
+    [
+      "T8.1",
+      "T8.4"
+    ],
+    [
+      "T8.3",
+      "T5.1"
+    ],
+    [
+      "T3.4",
+      "T8.3"
+    ],
+    [
+      "T0.1",
+      "T9.1"
+    ],
+    [
+      "T9.1",
+      "T9.2"
+    ],
+    [
+      "T9.1",
+      "T9.3"
+    ],
+    [
+      "T9.2",
+      "T9.4"
+    ],
+    [
+      "T9.3",
+      "T9.4"
+    ],
+    [
+      "T9.3",
+      "T9.5"
+    ],
+    [
+      "T9.1",
+      "T9.6"
+    ],
+    [
+      "T0.1",
+      "T10.1"
+    ],
+    [
+      "T10.1",
+      "T10.2"
+    ],
+    [
+      "T10.2",
+      "T10.3"
+    ],
+    [
+      "T2.2",
+      "T11.1"
+    ],
+    [
+      "T11.1",
+      "T11.2"
+    ],
+    [
+      "T5.1",
+      "T12.1"
+    ],
+    [
+      "T12.1",
+      "T12.2"
+    ],
+    [
+      "T9.4",
+      "T7.3"
+    ],
+    [
+      "T10.3",
+      "T7.3"
+    ],
+    [
+      "T12.2",
+      "T7.2"
+    ],
+    [
+      "T12.2",
+      "T13.7"
+    ],
+    [
+      "T13.1",
+      "T13.2"
+    ],
+    [
+      "T13.2",
+      "T13.3"
+    ],
+    [
+      "T13.2",
+      "T13.4"
+    ],
+    [
+      "T13.4",
+      "T13.5"
+    ],
+    [
+      "T13.3",
+      "T13.6"
+    ],
+    [
+      "T13.4",
+      "T13.6"
+    ],
+    [
+      "T13.5",
+      "T13.6"
+    ],
+    [
+      "T13.6",
+      "T13.7"
+    ],
+    [
+      "T13.6",
+      "T13.8"
+    ],
+    [
+      "T13.7",
+      "T7.2"
+    ]
   ]
 }
