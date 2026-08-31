@@ -60,3 +60,8 @@ lancedb_data/
 tmp/
 temp/
 *.tmp
+
+# Downloaded CLIP weights and labelled photographs for the retrieval test
+# (fetched by scripts/fetch-clip-models.sh and scripts/fetch-test-images.py)
+src/daemon_next/test-models/
+src/daemon_next/test-images/
