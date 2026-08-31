@@ -137,7 +137,7 @@ Worker / Local Indexer → LanceDB / Parquet → Delta → Daemon → Local stor
 ## 7. Decizii cheie
 
 - **Daemon + IPC**: GUI și CLI sunt clienți, nu rulează interogări.
-- **DuckDB**: motor OLAP embedded pentru analitică tabulară rapidă.
+- **DuckDB**: motor OLAP descărcabil, rulat ca proces separat al daemonului (ADR 014); nu e legat în binar.
 - **Rust pentru daemon**: performanță maximă și acces nativ la SIMD.
 - **MCP**: integrare standard cu agenți AI.
 - **Wizard modular**: utilizatorul controlează ce module și modele activează.

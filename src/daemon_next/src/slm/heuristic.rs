@@ -137,13 +137,14 @@ mod tests {
     use crate::config::DaemonConfig;
     use tempfile::TempDir;
 
-    fn temp_analytics() -> (Analytics, TempDir) {
+    fn temp_analytics() -> Option<(Analytics, TempDir)> {
         let dir = TempDir::new().unwrap();
         let config = DaemonConfig {
             data_dir: dir.path().to_path_buf(),
             ..DaemonConfig::default()
         };
-        (Analytics::open(&config).unwrap(), dir)
+        let analytics = Analytics::open(&config).unwrap();
+        analytics.is_available().then_some((analytics, dir))
     }
 
     #[test]
@@ -153,10 +154,12 @@ mod tests {
         assert!(!is_sql_question("show me pictures of beaches"));
     }
 
-    #[cfg(feature = "duckdb")]
     #[test]
     fn heuristic_sql_lists_tables() {
-        let (analytics, _dir) = temp_analytics();
+        let Some((analytics, _dir)) = temp_analytics() else {
+            eprintln!("skipping: no DuckDB engine installed (MIRAGE_DUCKDB_BIN unset)");
+            return;
+        };
         analytics
             .execute("CREATE TABLE photos (id INTEGER)")
             .unwrap();

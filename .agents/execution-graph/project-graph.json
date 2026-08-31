@@ -761,9 +761,10 @@
         "T13.2"
       ],
       "outputs": [
-        "src/daemon/src/modules/duckdb_engine.rs"
+        "src/daemon_next/src/analytics.rs",
+        "src/daemon_next/src/modules/catalog.rs"
       ],
-      "notes": "DuckDB native library loaded dynamically from downloads dir; query() returns missing-module error when absent. Design: .agents/specs/optional-engine-refactor.md §9."
+      "notes": "DuckDB nu mai e legat static in daemon: catalogul expune modulul runtime 'duckdb' (binar CLI oficial, SHA-256 pinuit pe 5 platforme), iar analytics.rs il ruleaza ca proces copil. Decizia initiala de libloading e inlocuita de ADR 014."
     },
     {
       "id": "T13.4",

@@ -151,7 +151,20 @@ async fn list_modules_returns_cached_catalog() {
     // written above arrive next to the CLIP modules the daemon ships with.
     assert!(ids.contains(&String::from("clip_text_encoder")));
     assert!(ids.contains(&String::from("clip_vision_encoder")));
-    assert_eq!(modules.len(), 5, "unexpected module set: {ids:?}");
+    // DuckDB is no longer linked in; it is offered as a download.
+    assert!(ids.contains(&String::from("duckdb")));
+    assert_eq!(modules.len(), 6, "unexpected module set: {ids:?}");
+
+    let duckdb = modules.iter().find(|m| m["module_id"] == "duckdb").unwrap();
+    // The daemon sees the developer's MIRAGE_DUCKDB_BIN if it is set; the empty
+    // downloads directory means that override is the only thing that can make
+    // the engine look ready.
+    let override_present = mirage_daemon::analytics::engine_override().is_some();
+    assert_eq!(
+        duckdb["state"],
+        if override_present { "ready" } else { "missing" },
+        "duckdb state should follow the engine on disk (override: {override_present})"
+    );
 
     let text_model = modules
         .iter()

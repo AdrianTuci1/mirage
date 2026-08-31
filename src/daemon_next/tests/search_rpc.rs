@@ -4,13 +4,21 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 async fn spawn_daemon(dir: &tempfile::TempDir) -> tokio::process::Child {
+    spawn_daemon_with(dir, true).await
+}
+
+/// Start the daemon against empty temp directories. `with_engine` decides
+/// whether `MIRAGE_DUCKDB_BIN` reaches the child, which is what makes the
+/// tabular feature available or missing.
+async fn spawn_daemon_with(dir: &tempfile::TempDir, with_engine: bool) -> tokio::process::Child {
     let socket_path = dir.path().join("mirage.sock");
     let config_path = dir.path().join("daemon.yaml");
     // An explicit config keeps the test off the developer's own daemon.yaml, and
     // empty roots mean no recursive watch is registered over a real directory tree.
     std::fs::write(&config_path, "roots: []\n").unwrap();
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_mirage-daemon"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_mirage-daemon"));
+    command
         .arg("--config")
         .arg(&config_path)
         .arg("--socket-path")
@@ -19,12 +27,19 @@ async fn spawn_daemon(dir: &tempfile::TempDir) -> tokio::process::Child {
         .arg(dir.path().join("data"))
         .arg("--models-dir")
         .arg(dir.path().join("models"))
+        // An empty module directory, so a locally downloaded DuckDB cannot make
+        // a "missing engine" test pass by accident.
+        .arg("--downloads-dir")
+        .arg(dir.path().join("downloads"))
         .arg("--log-level")
         .arg("debug")
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn daemon");
+        .stderr(Stdio::piped());
+    if !with_engine {
+        command.env_remove("MIRAGE_DUCKDB_BIN");
+    }
+
+    let mut child = command.spawn().expect("failed to spawn daemon");
 
     let stdout = child.stdout.take().unwrap();
     let mut reader = BufReader::new(stdout);
@@ -131,6 +146,12 @@ async fn search_rpc_returns_empty_then_indexed_results() {
 
 #[tokio::test]
 async fn query_rpc_executes_duckdb_sql() {
+    if mirage_daemon::analytics::engine_override().is_none() {
+        eprintln!(
+            "skipping: the DuckDB engine is a downloaded module; set MIRAGE_DUCKDB_BIN to test it"
+        );
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let socket_path = dir.path().join("mirage.sock");
     let mut child = spawn_daemon(&dir).await;
@@ -155,6 +176,31 @@ async fn query_rpc_executes_duckdb_sql() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["one"], 1);
     assert_eq!(rows[0]["msg"], "hello");
+
+    let _ = child.kill().await;
+    let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
+}
+
+#[tokio::test]
+async fn query_rpc_asks_to_install_the_engine_when_it_is_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket_path = dir.path().join("mirage.sock");
+    let mut child = spawn_daemon_with(&dir, false).await;
+
+    let result = mirage_daemon::ipc::client::IpcClient::call(
+        &socket_path,
+        "query",
+        Some(serde_json::json!({ "sql": "SELECT 1 AS one" })),
+    )
+    .await
+    .expect("failed to call query");
+
+    let error = result.error.expect("a missing engine must be reported");
+    assert!(
+        error.message.contains("not installed"),
+        "the client needs an actionable message, got {}",
+        error.message
+    );
 
     let _ = child.kill().await;
     let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;

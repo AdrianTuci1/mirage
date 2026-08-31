@@ -362,6 +362,11 @@ Vectorii produși de fallback au aceeași dimensiune (384) ca cei ONNX, deci sch
 
 ## 9. Încărcarea dinamică a DuckDB
 
+> **Neaplicabil (ADR 014).** Secțiunea propune `libloading` + `libduckdb.dylib` descărcat. Crate-ul `duckdb` rezolvă librăria nativă la
+> link-time (rustc scrie `LC_LOAD_DYLIB` în executabil), deci variabilele de mediu setate la runtime nu schimbă nimic, iar §9.4 recunoaște
+> aceeași limitare pe macOS. Implementarea aleasă este binarul DuckDB CLI descărcat ca modul `runtime` și rulat ca proces copil: vezi
+> ADR 014 și `src/daemon_next/src/analytics.rs`. Textul de mai jos rămâne ca istoric al analizei.
+
 ### 9.1 Layout așteptat
 
 ```

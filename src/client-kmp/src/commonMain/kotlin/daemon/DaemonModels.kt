@@ -96,6 +96,7 @@ object DaemonModels {
     data class DaemonModuleStatus(
         @SerialName("module_id")
         val moduleId: String,
+        val name: String = "",
         val version: String? = null,
         val state: ModuleState,
         @SerialName("bytes_downloaded")

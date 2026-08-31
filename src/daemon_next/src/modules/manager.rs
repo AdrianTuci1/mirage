@@ -20,6 +20,9 @@ const CATALOG_FILE: &str = "catalog.json";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleStatus {
     pub module_id: String,
+    /// Display name from the catalog, so a client does not have to invent one
+    /// from the id. Falls back to the id for modules the catalog does not list.
+    pub name: String,
     pub version: Option<String>,
     pub state: ModuleState,
     pub bytes_downloaded: u64,
@@ -114,20 +117,7 @@ impl ModuleManager {
 
         if let Some(ref catalog) = catalog_for_sync {
             Arc::clone(&inner).sync_catalog_to_state(catalog).await;
-
-            #[cfg(feature = "duckdb")]
-            if let Some(manifest) = catalog.find_module("duckdb") {
-                inner
-                    .set_state(
-                        "duckdb",
-                        ModuleState::Ready,
-                        Some(manifest.version.clone()),
-                        0,
-                        0,
-                        None,
-                    )
-                    .await;
-            }
+            inner.reconcile_duckdb_engine(catalog).await;
 
             #[cfg(feature = "onnx")]
             if let Some(manifest) = catalog.find_module("onnx_runtime") {
@@ -203,6 +193,7 @@ impl ModuleManager {
         drop(guard);
 
         self.inner.sync_catalog_to_state(&catalog).await;
+        self.inner.reconcile_duckdb_engine(&catalog).await;
 
         Ok(catalog)
     }
@@ -430,25 +421,30 @@ impl ModuleManager {
         let instance = state.get(module_id)?.clone();
         drop(state);
 
-        let dependencies_ready = if let Some(catalog) = self.inner.catalog.read().await.as_ref() {
-            if let Some(manifest) = catalog.find_module(module_id) {
-                let mut ready = true;
-                for dep in &manifest.dependencies {
-                    if !self.is_ready(dep).await {
-                        ready = false;
-                        break;
-                    }
+        let manifest = self
+            .inner
+            .catalog
+            .read()
+            .await
+            .as_ref()
+            .and_then(|catalog| catalog.find_module(module_id).cloned());
+
+        let mut dependencies_ready = true;
+        if let Some(manifest) = &manifest {
+            for dep in &manifest.dependencies {
+                if !self.is_ready(dep).await {
+                    dependencies_ready = false;
+                    break;
                 }
-                ready
-            } else {
-                true
             }
-        } else {
-            true
-        };
+        }
 
         Some(ModuleStatus {
             module_id: module_id.to_string(),
+            name: manifest
+                .as_ref()
+                .map(|manifest| manifest.name.clone())
+                .unwrap_or_else(|| module_id.to_string()),
             version: instance.version.clone(),
             state: instance.state.clone(),
             bytes_downloaded: instance.bytes_downloaded,
@@ -460,6 +456,57 @@ impl ModuleManager {
 }
 
 impl Inner {
+    /// Report the DuckDB engine by what is actually on disk.
+    ///
+    /// Unlike the ONNX Runtime, which this build links, the tabular engine is a
+    /// downloaded executable, so a stale `state.json` must not claim it is ready
+    /// after the file was removed, and an installed one must not look missing.
+    /// States that describe a running download are left alone.
+    async fn reconcile_duckdb_engine(&self, catalog: &Catalog) {
+        let module_id = crate::analytics::DUCKDB_MODULE_ID;
+        let Some(manifest) = catalog.find_module(module_id) else {
+            return;
+        };
+        let module_dir = self.downloads_dir.join(module_id);
+        let installed = crate::analytics::engine_override()
+            .or_else(|| crate::analytics::installed_engine(&module_dir))
+            .map(|path| {
+                // The version directory names itself; an override from the
+                // environment falls back to the catalog version.
+                path.parent()
+                    .filter(|dir| dir.starts_with(&module_dir))
+                    .and_then(|dir| dir.file_name())
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| manifest.version.clone())
+            });
+        let recorded = self
+            .state
+            .read()
+            .await
+            .get(module_id)
+            .and_then(|instance| instance.version.clone());
+        let version = installed.clone().or(recorded);
+
+        if let Some(version) = installed {
+            self.set_state(module_id, ModuleState::Ready, Some(version), 0, 0, None)
+                .await;
+            return;
+        }
+
+        // Nothing on disk: only a state that claims otherwise needs correcting.
+        let claims_ready = {
+            let state = self.state.read().await;
+            state
+                .get(module_id)
+                .map(|instance| instance.state == ModuleState::Ready)
+                .unwrap_or(false)
+        };
+        if claims_ready {
+            self.set_state(module_id, ModuleState::Missing, version, 0, 0, None)
+                .await;
+        }
+    }
+
     async fn sync_catalog_to_state(&self, catalog: &Catalog) {
         let mut state = self.state.write().await;
         for manifest in &catalog.modules {

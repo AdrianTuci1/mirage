@@ -11,9 +11,12 @@
 - **Buget memorie indexare:** daemonul respectă `memory_budget_mb` (default 3072 MB); batching embeddings, upsert LanceDB și procesare cloud sunt limitate de acest buget.
 - **Build artifacts:** directorul `src/daemon_next/target/` a fost curățat din nou (~20.5GB eliberați); nu au rămas fișiere `.log`.
 - **Profil dev Cargo:** `src/daemon_next/Cargo.toml` are acum `[profile.dev] debug = "line-tables-only"` + `[profile.dev.package."*"] debug = false`;
-  înainte, DWARF complet pentru 733 de crate umfla `target/`. Greutatea binarului rămas nu e debug info, ci cod static: `libduckdb.a` 236 MB (feature `bundled`),
-  `lance` 227 MB, `lance-index` 105 MB, `aws-sdk-s3` 93 MB, `ort-sys` 78 MB (ONNX Runtime static).
+  înainte, DWARF complet pentru toate cratele umfla `target/`.
   Greutățile CLIP (148 MB) și tabela LanceDB sunt fișiere runtime în `models_dir` / `data_dir/lancedb`, nu sunt linkuite în binar.
+- **DuckDB (ADR 014):** daemonul nu mai leagă DuckDB C++ (era 236 MB de `libduckdb.a` cu feature `bundled`). Catalogul expune modulul
+  `duckdb` (kind `runtime`, `is_optional`) cu binarul CLI oficial v1.5.5, pinat SHA-256 pe 5 platforme; `analytics.rs` îl pornește ca proces
+  (`<bin> -json -batch -bail -no-init <db> -c <sql>`), serialized printr-un mutex (DuckDB blochează fișierul). `MIRAGE_DUCKDB_BIN` suprascrie
+  calea pentru dezvoltatori/teste; fără engine, `is_available()` e false și `query()` returnează „module is not installed, download via Modules”.
 
 ## Ce funcționează local (finalizat)
 
@@ -31,7 +34,7 @@
 | Packaging | ✅ | script-uri DMG/MSI/DEB, binare daemon/CLI în `package-resources/` |
 | SLM heuristic | ✅ | routing intenție + scaffold ONNX |
 | Batching/downsampling indexare | ✅ | embeddings în sub-batches cu buget memorie, upsert batched LanceDB, procesare cloud în chunk-uri, downsampling vectorial |
-| Teste Rust | ✅ | 63 passed cu feature-urile implicite (duckdb+onnx), 59 în config onnx-only; `tests/clip_space.rs` adaugă 5 teste pe greutăți reale, sărite când `MIRAGE_CLIP_MODELS` lipsește |
+| Teste Rust | ⚠ de reconfirmat | 64 passed / 60 onnx-only erau numerele de dinainte de ADR 014 (când `duckdb` era în `default`); acum implicitul e `["onnx"]`. `tests/clip_space.rs` (5 teste pe greutăți reale) și testele care au nevoie de motor (`analytics.rs`, `heuristic_sql_lists_tables`, `query_rpc_executes_duckdb_sql`) se sărită fără `MIRAGE_CLIP_MODELS` / `MIRAGE_DUCKDB_BIN` |
 | Teste UI (jvmTest) | ✅ | 7 teste Compose pentru Spotlight, clipboard și Settings; aceleași scene exportă PNG în `build/ui-shots/` pentru comparat cu board-urile Penpot |
 
 ## Ce mai trebuie pentru local running complet
@@ -40,7 +43,8 @@
 |------|------------|------|
 | Config conectori din UI | ✅ finalizat | Tab Connectors în Settings cu add/edit/delete; salvare prin `update_connectors` |
 | Footer index/module status indicator | ✅ finalizat | Cerc de progres + procent + cercuri icon surse cu toggle în footer |
-| Refactor DuckDB/ONNX ca module descărcabile | ✅ finalizat | Feature-gate Cargo + catalog built-in + auto-ready + Settings Modules tab real |
+| Refactor DuckDB/ONNX ca module descărcabile | 🟡 parcial | DuckDB: descărcare reală (ADR 014, catalog + motor rulat ca proces). ONNX Runtime: încă legat la compile-time prin `ort/download-binaries`; „auto-ready” a rămas doar pentru el |
+| ONNX Runtime ca motor descarcabil | 🟠 medie | RAMAS: `ort` e inca legat static (`download-binaries` + `copy-dylibs`, ~78 MB in rlib); acelasi model ca la DuckDB (ADR 014) il poate transforma in sidecar descarcabil |
 | Testare packaging end-to-end | 🟢 scăzută | Necesită JDK 21 + Rust pe mediu potrivit; nu e blocant |
 | Calibrare ranking cross-modal | 🟠 medie | intercalarea rezolvă vizibilitatea; mai lipsesc praguri absolute pe modalitate, ca un document slab să nu urce deasupra unei fotografii bune |
 | Traseul worker/offload | 🟠 medie | tab-ul Servers descrie deja workerii; delta pull și garanția că nu pleacă credential-e trebuie verificate cap-coadă |

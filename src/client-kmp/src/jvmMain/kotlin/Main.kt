@@ -129,9 +129,13 @@ fun main() = application {
                         m.bytesDownloaded.toFloat() / m.bytesTotal.toFloat()
                     } else null
                     val ready = m.state == DaemonModels.ModuleState.READY && m.dependenciesReady
-                    val label = m.moduleId
-                        .replace("_", " ")
-                        .replaceFirstChar { it.uppercase() }
+                    // The catalog carries the display name; older daemons send an
+                    // empty one, so fall back to prettifying the id.
+                    val label = m.name.ifBlank {
+                        m.moduleId
+                            .replace("_", " ")
+                            .replaceFirstChar { it.uppercase() }
+                    }
                     put(m.moduleId, label, ready, progress)
                 }
                 val indexStatus = client.indexStatus()
